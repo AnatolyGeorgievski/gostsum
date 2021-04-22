@@ -800,8 +800,8 @@ static inline void F1(v8di* v)
 #endif
 #include <x86intrin.h>
 
-static __attribute__ ((noinline))
-void F1(v2di *v, const v2di *w)
+static //__attribute__ ((noinline))
+void F1(v8di *v, const v8di *w)
 {
     uint64_t* s = (uint64_t*)v;
     {
@@ -838,7 +838,7 @@ void F1(v2di *v, const v2di *w)
         v64qi vv, ww;
         __builtin_memcpy(&vv, v, sizeof(vv)); // загрузка вектора без выравнивания
         __builtin_memcpy(&ww, w, sizeof(ww));
-        v64qi a = vv ^ ww;
+        v64qi a = (v64qi)(vv ^ ww);
 
         s[0]
         = t1[a[0]&0xFF] ^ t2[a[8]&0xFF] ^ t3[a[16]&0xFF] ^ t4[a[24]&0xFF]
@@ -894,9 +894,9 @@ void g_N(const uint64_t n, v2di *h, const v2di *m)
 
     int i=0;
     do {
-        F1((v2di*)&K, (v2di*)&C16[i]);
+        F1(&K, &C16[i]);
         if (i==12) break;
-        F1((v2di*)&t, (v2di*)&K);
+        F1(&t, &K);
         i++;
     } while(1);
     X4((v8di*)h,(v8di*)m, &t, &K);
