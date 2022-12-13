@@ -19,16 +19,16 @@ $ gcc -Os -s -DDEBUG_GOST -o gosthash.exe gosthash.c base64.c
 echo -n "8JaanTcVv6ndF8Xp/N011Lp46e68LjaUT9FhnEyQGs8=" | base64 -id | od -A n -X
 
  */
-#include <malloc.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-//#include <glib.h>
 #include "hmac.h"
-#if defined(__sun__) || defined(__linux__)
+#if defined(__sun__) || defined(__linux__) || defined(__FreeBSD__)
 #define _aligned_malloc(size, align) memalign(align, size)
 #define _aligned_free(ptr) free(ptr)
-#endif // __sun__ __linux__
+#else
+#include <malloc.h>
+#endif // __sun__ __linux__ __FreeBSD__
 
 typedef char v16qi __attribute__((__vector_size__(16)));
 //typedef uint8_t v4qi __attribute__((__vector_size__(4)));
@@ -395,12 +395,12 @@ static v4si Enc(gost_ctx *c, const v256 * k, v4si in)
     return (v4si){in[2],in[3],in[1],in[0]};
 //    return ((uint64_t)n1)<<32 | n2;
 }
-
+/*
 static inline uint16_t do_phi1(v256 *x)
 {// не использует sse
     return x->h[0] ^ x->h[1] ^ x->h[2] ^ x->h[3] ^ x->h[12] ^ x->h[15];
 //    return x->d[0] ^ x->d[0]>>16 ^ x->d[0]>>32 ^ x->d[0]>>48 ^ x->d[3] ^ x->d[3]>>48;
-}
+} */
 /*
 void do_phi4(uint64_t *x)
 {

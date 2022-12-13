@@ -20,8 +20,8 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
-#include <malloc.h>
-#if defined(__linux__)
+#include <stdlib.h>
+#if defined(__linux__) || defined(__FreeBSD__)
 #include <netinet/in.h>
 #else
 #if defined(__BYTE_ORDER__) && (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
@@ -32,7 +32,6 @@
 #define ntohl(x) (x)
 #endif // __BYTE_ORDER__
 #endif
-//#include <glib.h>
 #include "hmac.h"
 typedef struct _GSList GSList;
 struct _GSList {
