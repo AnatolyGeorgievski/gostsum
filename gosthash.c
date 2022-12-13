@@ -65,12 +65,11 @@ typedef int32_t v4Si __attribute__((__vector_size__(16)));
 typedef uint64_t v4di __attribute__((__vector_size__(32)));
 typedef uint8_t v4qi __attribute__((__vector_size__(4)));
 typedef char v16qi __attribute__ ((__vector_size__(16)));
-typedef char v32qi __attribute__ ((__vector_size__(32)));
+//typedef char v32qi __attribute__ ((__vector_size__(32)));
 
 //typedef unsigned long long  v2di __attribute__((mode(V2DI)));
 
 union _v256 {
-    v4di v;
     v2di q[2];
     uint64_t d[4];
     uint32_t s[8];
@@ -276,11 +275,13 @@ void UADD(v256 *r, const v256 *a)
 static
 void A(v256 *x)
 {
-/*
-    x->v = __builtin_shuffle(x->v, (v4di){1,2,3,0});
-    */
+#ifdef __clang__
+    v2di v0 = __builtin_shufflevector(x->q[0],x->q[1], 1,2);
+    v2di v1 = __builtin_shufflevector(x->q[1],x->q[0], 1,2);
+#else
     v2di v0 = __builtin_shuffle(x->q[0],x->q[1], (v2di){1,2});
     v2di v1 = __builtin_shuffle(x->q[1],x->q[0], (v2di){1,2});
+#endif // __clang__
     v1[1]^=v0[0];
     x->q[0] = v0;
     x->q[1] = v1;
@@ -289,10 +290,13 @@ void A(v256 *x)
 static
 void AA(v256 *x)
 {
-//    x->v = __builtin_shuffle(x->v, (v4di){2,3,0,1});
     v2di z  = x->q[0];
     x->q[0] = x->q[1];
+#ifdef __clang__
+    x->q[1] = z ^  __builtin_shufflevector(z,x->q[1], 1,2);//(v2di){z[1],x->q[0][0]};
+#else
     x->q[1] = z ^  __builtin_shuffle(z,x->q[1], (v2di){1,2});//(v2di){z[1],x->q[0][0]};
+#endif // __clang__
 }
 #if 0 // это тест который делает тоже самое переставляет байты
 void __attribute__((constructor)) test2()
@@ -315,8 +319,13 @@ static void XP(const v256 *x, const v256 *c, v256 *a)
     register v256 z;
     z.q[0] = x->q[0] ^ c->q[0];
     z.q[1] = x->q[1] ^ c->q[1];
+#ifdef __clang__
+    a->q[0] = (v2di)__builtin_shufflevector((v16qi)z.q[0],(v16qi)z.q[1], 0, 8,16,24, 1, 9,17,25, 2,10,18,26, 3,11,19,27);
+    a->q[1] = (v2di)__builtin_shufflevector((v16qi)z.q[0],(v16qi)z.q[1], 4,12,20,28, 5,13,21,29, 6,14,22,30, 7,15,23,31);
+#else
     a->q[0] = (v2di)__builtin_shuffle((v16qi)z.q[0],(v16qi)z.q[1], (v16qi){ 0, 8,16,24, 1, 9,17,25, 2,10,18,26, 3,11,19,27});
     a->q[1] = (v2di)__builtin_shuffle((v16qi)z.q[0],(v16qi)z.q[1], (v16qi){ 4,12,20,28, 5,13,21,29, 6,14,22,30, 7,15,23,31});
+#endif // __clang__
 }
 #if 0
 void    print_K(uint64_t * K, char* idx)
@@ -408,8 +417,32 @@ void R12(v256 * x)
     v8hi h1 = (v8hi)x->q[1];
     v8hi hz = (v8hi){0};
     v8hi v0,v1;
-    v0 = __builtin_shuffle(h0,hz,(v8hi){-1,-1,-1,-1,0,0,0,0});
-    v0^= __builtin_shuffle(h0,hz,(v8hi){-1,-1,-1,-1,2,-1,2,2});
+#ifdef __clang__
+    v0 = __builtin_shufflevector(h0,hz,8,8,8,8,0,0,0,0);
+    v0^= __builtin_shufflevector(h0,hz,8,8,8,8,2,8,2,2);
+    v0^= __builtin_shufflevector(h0,hz,8,8,8,8,3,4,3,4);
+    v0^= __builtin_shufflevector(h0,hz,8,8,8,8,1,8,5,6);
+    v0^= __builtin_shufflevector(hz,h1,12,0,0,0,12,12,12,12);
+    v0^= __builtin_shufflevector(hz,h1,0,13,0,0, 0,13,13,13);
+    v0^= __builtin_shufflevector(hz,h1,0,0,14,0, 0, 0,14,14);
+    v0^= __builtin_shufflevector(hz,h1,0,0,0,15,15,15,15, 0);
+    x->q[0] = (v2di)v0;
+
+    v1 = __builtin_shufflevector(h0,h0,1,0,1,0,0,1,2,0);
+    v1^= __builtin_shufflevector(h0,h0,3,1,2,1,3,4,5,1);
+    v1^= __builtin_shufflevector(h0,hz,5,3,4,5,6,7,8,2);
+    v1^= __builtin_shufflevector(h0,h1, 7,4,5,6,7, 8,8,6);
+    v1^= __builtin_shufflevector(h0,h1,13,6,7,8,9,10,9,9);
+    v1^= __builtin_shufflevector(hz,h1,0, 8,9,10,11,12,11,10);
+    v1^= __builtin_shufflevector(hz,h1,0,12,0,12,12,13,13, 0);
+    v1^= __builtin_shufflevector(hz,h1,14,14,13,14,13,14,14,14);
+    v1^= __builtin_shufflevector(hz,h1,15, 0,15,15, 0, 0,15, 0);
+    x->q[1] = (v2di)v1;
+#else
+    v0 = __builtin_shuffle(h0,hz,(v8hi){8,8,8,8,0,0,0,0});
+//    v0 = __builtin_shuffle(h0,hz,(v8hi){-1,-1,-1,-1,0,0,0,0});
+    v0^= __builtin_shuffle(h0,hz,(v8hi){8,8,8,8,2,8,2,2});
+//    v0^= __builtin_shuffle(h0,hz,(v8hi){-1,-1,-1,-1,2,-1,2,2});
     v0^= __builtin_shuffle(h0,hz,(v8hi){8,8,8,8,3,4,3,4});
     v0^= __builtin_shuffle(h0,hz,(v8hi){8,8,8,8,1,8,5,6});
     v0^= __builtin_shuffle(hz,h1,(v8hi){12,0,0,0,12,12,12,12});
@@ -428,7 +461,7 @@ void R12(v256 * x)
     v1^= __builtin_shuffle(hz,h1,(v8hi){14,14,13,14,13,14,14,14});
     v1^= __builtin_shuffle(hz,h1,(v8hi){15, 0,15,15, 0, 0,15, 0});
     x->q[1] = (v2di)v1;
-
+#endif
 //	register v256 y = *x;
 /*
     x->d[0] = y.d[3];
@@ -500,6 +533,33 @@ void R61(v256 *x, v256 *y)
     v8hi h1 = (v8hi)x->q[1];
     v8hi hz = (v8hi){0};
     v8hi v0,v1;
+#ifdef __clang__
+    v0 = __builtin_shufflevector(h0,h0,1,0,1,0,0,0,1,0);
+    v0^= __builtin_shufflevector(h0,h0,3,1,2,1,3,2,3,1);
+    v0^= __builtin_shufflevector(h0,h0,7,3,4,5,6,3,4,3);
+    v0^= __builtin_shufflevector(h0,hz,8,4,5,6,7,4,5,4);
+    v0^= __builtin_shufflevector(h0,h1,10,8,9,10,11,7,8,5);
+    v0^= __builtin_shufflevector(h0,h1,11,11,12,12,12,8,9,6);
+    v0^= __builtin_shufflevector(hz,h1,13,14,15,13,13,13,14,9);
+    v0^= __builtin_shufflevector(hz,h1,14,0,0,15,14,14,15,10);
+    v0^= __builtin_shufflevector(hz,h1,15,0,0,0,15,0,0,12);
+    y->q[0] = (v2di)v0;
+    v1 = __builtin_shufflevector(h0,h0, 1, 2, 3,0,0,1,0,1);
+    v1^= __builtin_shufflevector(h0,h0, 2, 3, 4,1,4,5,1,2);
+    v1^= __builtin_shufflevector(h0,h0, 4, 5, 6,2,5,6,3,4);
+    v1^= __builtin_shufflevector(h0,h0, 5, 6, 7,3,6,7,6,7);
+    v1^= __builtin_shufflevector(h0,h1, 6, 7, 8,4,8,9,7,8);
+    v1^= __builtin_shufflevector(h0,h1, 7, 8, 9,5,9,10,8,9);
+    v1^= __builtin_shufflevector(h0,h1,10,11,12,7,10,11,10,11);
+    v1^= __builtin_shufflevector(hz,h1,11,12,13,8,11,12,11,12);
+    v1^= __builtin_shufflevector(hz,h1,13,14,15,9,12,13,13,14);
+    v1^= __builtin_shufflevector(hz,h1, 0, 0,0,10,13,14,14,15);
+    v1^= __builtin_shufflevector(hz,h1, 0, 0,0,12,14,15, 0, 0);
+    v1^= __builtin_shufflevector(hz,h1, 0, 0,0,13, 0, 0, 0, 0);
+    v1^= __builtin_shufflevector(hz,h1, 0, 0,0,14, 0, 0, 0, 0);
+    v1^= __builtin_shufflevector(hz,h1, 0, 0,0,15, 0, 0, 0, 0);
+    y->q[1] = (v2di)v1;
+#else
     v0 = __builtin_shuffle(h0,   (v8hi){1,0,1,0,0,0,1,0});
     v0^= __builtin_shuffle(h0,   (v8hi){3,1,2,1,3,2,3,1});
     v0^= __builtin_shuffle(h0,   (v8hi){7,3,4,5,6,3,4,3});
@@ -525,6 +585,7 @@ void R61(v256 *x, v256 *y)
     v1^= __builtin_shuffle(hz,h1,(v8hi){ 0, 0,0,14, 0, 0, 0, 0});
     v1^= __builtin_shuffle(hz,h1,(v8hi){ 0, 0,0,15, 0, 0, 0, 0});
     y->q[1] = (v2di)v1;
+#endif
 /*
     y->h[ 0] = x->h[ 1] ^ x->h[ 3] ^ x->h[ 7] ^            x->h[10] ^ x->h[11] ^ x->h[13] ^ x->h[14] ^ x->h[15];
     y->h[ 1] = x->h[ 0] ^ x->h[ 1] ^ x->h[ 3] ^ x->h[ 4] ^ x->h[ 8] ^ x->h[11] ^ x->h[14];
@@ -556,6 +617,15 @@ void R(v256 *x)
     v8hi v0,v1;
 
 //    v8hi z = (v8hi){0};
+#ifdef __clang__
+    v0 = __builtin_shufflevector(h0,h1,1,2,3,4,5,6,7,8);
+    v1 = __builtin_shufflevector(h1,h0,1,2,3,4,5,6,7,8);
+    v1^= __builtin_shufflevector(hz,v0,1,2,3,4,5,6,7,8);
+    v1^= __builtin_shufflevector(h0,h0,0,0,0,0,0,0,0,2);
+    v1^= __builtin_shufflevector(h0,h0,0,0,0,0,0,0,0,3);
+    v1^= __builtin_shufflevector(h1,h1,0,0,0,0,0,0,0,4);
+    v1^= __builtin_shufflevector(h1,h1,0,0,0,0,0,0,0,7);
+#else
     v0 = __builtin_shuffle(h0, h1,(v8hi){1,2,3,4,5,6,7,8});
     v1 = __builtin_shuffle(h1, h0,(v8hi){1,2,3,4,5,6,7,8});
     v1^= __builtin_shuffle(hz, v0,(v8hi){1,2,3,4,5,6,7,8});
@@ -563,6 +633,7 @@ void R(v256 *x)
     v1^= __builtin_shuffle(h0,    (v8hi){0,0,0,0,0,0,0,3});
     v1^= __builtin_shuffle(h1,    (v8hi){0,0,0,0,0,0,0,4});
     v1^= __builtin_shuffle(h1,    (v8hi){0,0,0,0,0,0,0,7});
+#endif
     x->q[0]=(v2di)v0;
     x->q[1]=(v2di)v1;
 //    x->q[1] = x->h[0] ^ x->h[1] ^ x->h[2] ^ x->h[3] ^ x->h[12] ^ x->h[15];
@@ -605,7 +676,7 @@ static void R60(v256 *x)
     do_phi12(x);
 
 //	do_phi60(x);
-#if defined (__AVX__)
+#if 0// defined (__AVX__)
     x->v = (v4di){x->d[3], x->d[0], x->d[1], x->d[2]};
 #elif defined (__SSE2__)
     v2di y  = (v2di){x->d[3], x->d[0]};
@@ -633,7 +704,11 @@ static void gost_step(gost_ctx *c, v256* H, v256* M)
     s0 = (v4si) H->q[0];
     s0 = Enc(c,&K,s0);
     A(&U); AA(&V); XP(&U,&V,&K);
+#ifdef __clang__
+    s0 = __builtin_shufflevector((v4si) H->q[0], s0, 2,3,6,7);
+#else
     s0 = __builtin_shuffle((v4si) H->q[0], s0, (v4si){2,3,6,7});
+#endif
     S.q[0] = (v2di) Enc(c,&K,s0);
 
     XOR(&U, &C1);
@@ -641,7 +716,11 @@ static void gost_step(gost_ctx *c, v256* H, v256* M)
     s1 = (v4si) H->q[1];
     s1 = Enc(c,&K,s1);
     A(&U); AA(&V); XP(&U,&V,&K);
+#ifdef __clang__
+    s1 = __builtin_shufflevector((v4si) H->q[1], s1, 2,3,6,7);
+#else
     s1 = __builtin_shuffle((v4si) H->q[1], s1, (v4si){2,3,6,7});
+#endif
     S.q[1] = (v2di)Enc(c,&K,s1);
 
     R12(&S);
@@ -676,9 +755,20 @@ static void gost_init(gost_ctx *c, const gost_subst_block *b)
     v16qi k5 = b->k5;
     v16qi k3 = b->k3;
     v16qi k1 = b->k1;
-    v16qi k= {0};
     for (i = 0; i < 16; i++) {
-        k[0] = b->k8[i]<<4;
+#if 1//def __clang__
+		uint8_t q;
+		q = b->k8[i]<<4;
+		c->k87[i] = (v16qi){q,q,q,q, q,q,q,q, q,q,q,q, q,q,q,q} ^ k7;
+		q = b->k6[i]<<4;
+        c->k65[i] = (v16qi){q,q,q,q, q,q,q,q, q,q,q,q, q,q,q,q} ^ k5;
+		q = b->k4[i]<<4;
+        c->k43[i] = (v16qi){q,q,q,q, q,q,q,q, q,q,q,q, q,q,q,q} ^ k3;
+		q = b->k2[i]<<4;
+        c->k21[i] = (v16qi){q,q,q,q, q,q,q,q, q,q,q,q, q,q,q,q} ^ k1;
+#else
+		v16qi k= {0};
+		k[0] = b->k8[i]<<4;
         k = __builtin_shuffle(k, (v16qi){0});
         //__builtin_memset(&k, b->k8[i]<<4 ,16);
         c->k87[i] = k ^ k7;
@@ -694,6 +784,7 @@ static void gost_init(gost_ctx *c, const gost_subst_block *b)
         k = __builtin_shuffle(k, (v16qi){0});
         //__builtin_memset(&k, b->k2[i]<<4 ,16);
         c->k21[i] = k ^ k1;
+#endif
     }
 /*
     uint32_t x;
@@ -780,7 +871,6 @@ static void gost94_final (Gost94Ctx *ctx, uint8_t * tag, unsigned int tlen)
         ctx->size += ctx->offset<<3;
         ctx->offset=0;
     }
-    //ctx->M.v = (v4di){ctx->size,0};
     ctx->M.q[0] = (v2di){ctx->size,0};
     ctx->M.q[1] = (v2di){0};
     gost_step(ctx->ctx, &ctx->H,&ctx->M);
@@ -829,14 +919,15 @@ void gost_base64(gost_ctx* ctx, char* message, int length)
     printf("Digest: %s\n", b64);
 }
 #endif
-static void GOST(gost_ctx* ctx, char* message)
+static void GOST(const MDigest *md, char* message)
 {
     int len;
     char hash[32];
     len = strlen(message);
 
 //    printf("length = %d\n", len);
-    gost_digest2(ctx, (uint8_t*)message, len, (uint8_t*)hash);
+//    gost_digest2(ctx, (uint8_t*)message, len, (uint8_t*)hash);
+	digest(md, (uint8_t*)&hash[0], md->hash_len, (uint8_t*)message, len);
     char ch;//
     if (len>=128)  {
         ch = message[128];
@@ -855,21 +946,22 @@ static void GOST(gost_ctx* ctx, char* message)
 }
 int main (int argc, char *argv[])
 {
-    gost_ctx cipher_ctx;
-    gost_init(&cipher_ctx, NULL);//&GostR3411_94_CryptoProParamSet);
+//    gost_ctx cipher_ctx;
+//    gost_init(&cipher_ctx, NULL);//&GostR3411_94_CryptoProParamSet);
 
     if (argc > 1 ) {
         char* filename = argv[1];
         FILE* fp = fopen(filename, "r");
-        char* buf = malloc(2000000);
+        char* buf = malloc(2000000+4);
         int len = fread(buf, 1, 2000000, fp);
 //        char* s = &buf[len-1];
 //        while (s[0]=='\r' || s[0]=='\n' || s[0]==' ') { s--, len--; }
         buf[len]='\0';
 //        gost_init(&cipher_ctx, NULL);
 //        GOST(&cipher_ctx, buf);
-        gost_init(&cipher_ctx, &GostR3411_94_CryptoProParamSet);
-        GOST(&cipher_ctx, buf);
+		const MDigest *md = digest_select(MD_GOSTR341194_CP);
+//        gost_init(&cipher_ctx, &GostR3411_94_CryptoProParamSet);
+		GOST(md, buf);
 		fclose(fp);
 		free(buf);
         return 0;
@@ -899,33 +991,35 @@ int main (int argc, char *argv[])
     gost_digest(&cipher_ctx, m, len, NULL);
     free(m);
  */
-    GOST(&cipher_ctx, "This is message, length=32 bytes");
-    GOST(&cipher_ctx, "The quick brown fox jumps over the lazy dog");
-    GOST(&cipher_ctx, "The quick brown fox jumps over the lazy cog");
-    GOST(&cipher_ctx, "Suppose the original message has length = 50 bytes");
-    GOST(&cipher_ctx, "");
-    GOST(&cipher_ctx, "a");
-    GOST(&cipher_ctx, "abc");
-    GOST(&cipher_ctx, "message digest");
-    GOST(&cipher_ctx, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789");
-    GOST(&cipher_ctx, "12345678901234567890123456789012345678901234567890123456789012345678901234567890");
+	const MDigest *md = digest_select(MD_GOSTR341194);
+    GOST(md, "This is message, length=32 bytes");
+    GOST(md, "The quick brown fox jumps over the lazy dog");
+    GOST(md, "The quick brown fox jumps over the lazy cog");
+    GOST(md, "Suppose the original message has length = 50 bytes");
+    GOST(md, "");
+    GOST(md, "a");
+    GOST(md, "abc");
+    GOST(md, "message digest");
+    GOST(md, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789");
+    GOST(md, "12345678901234567890123456789012345678901234567890123456789012345678901234567890");
     char *m1 = malloc(1000002);
     memset(m1, 'U', 128); m1[128]='\0';
-    GOST(&cipher_ctx, m1);
+    GOST(md, m1);
     memset(m1, 'a', 1000000);m1[1000000]='\0';
-    GOST(&cipher_ctx, m1);
+    GOST(md, m1);
 
     printf("\nCryptoPro:\n");
-    gost_init(&cipher_ctx, &GostR3411_94_CryptoProParamSet);
-    GOST(&cipher_ctx, "");
-    GOST(&cipher_ctx, "a");
-    GOST(&cipher_ctx, "abc");
-    GOST(&cipher_ctx, "message digest");
-    GOST(&cipher_ctx, "The quick brown fox jumps over the lazy dog");
+	md = digest_select(MD_GOSTR341194_CP);
+//    gost_init(md, &GostR3411_94_CryptoProParamSet);
+    GOST(md, "");
+    GOST(md, "a");
+    GOST(md, "abc");
+    GOST(md, "message digest");
+    GOST(md, "The quick brown fox jumps over the lazy dog");
     memset(m1, 'U', 128); m1[128]='\0';
-    GOST(&cipher_ctx, m1);
+    GOST(md, m1);
     memset(m1, 'a', 1000000);m1[1000000]='\0';
-    GOST(&cipher_ctx, m1);
+    GOST(md, m1);
 
 /*
 ГОСТ Р 34.11-94 с «тестовыми» параметрами
@@ -955,7 +1049,7 @@ GOST("Suppose the original message has length = 50 bytes") = c3730c5cbccacf915ac
 GOST(128 of "U") = 1c4ac7614691bbf427fa2316216be8f10d92edfd37cd1027514c1008f649c4e8
 GOST(1000000 of "a") = 8693287aa62f9478f7cb312ec0866b6c4e4a0f11160441e8f4ffcd2715dd554f
 */
-#if 1
+#if 0
     int sh[16], j;
     uint16_t mask = 0x900F;
     for (i=0; i< 16;i++){
@@ -985,7 +1079,7 @@ GOST(1000000 of "a") = 8693287aa62f9478f7cb312ec0866b6c4e4a0f11160441e8f4ffcd271
     }
 	 printf("mask=%04X\n", mask);
 #endif
-
+#if 0
     uint8_t msg2[]= "A9993E364706816ABA3E25717850C26C9CD0D89D";
     len = strlen((char*)msg2) >>1;
     m=malloc(len);
@@ -998,10 +1092,12 @@ GOST(1000000 of "a") = 8693287aa62f9478f7cb312ec0866b6c4e4a0f11160441e8f4ffcd271
 	free(m);
 	free(dst);
 	free(m1);
+#endif
+#if 0
 {
     Gost94Ctx ctx;
     if (hash_params[0].ctx== NULL) {
-        hash_params[0].ctx = malloc(sizeof(gost_ctx));
+        hash_params[0].ctx = _aligned_malloc(sizeof(gost_ctx));
         gost_init(hash_params[0].ctx, hash_params[0].paramset);
     }
     ctx.ctx =  hash_params[0].ctx; ctx.hlen=32;
@@ -1030,7 +1126,7 @@ GOST(1000000 of "a") = 8693287aa62f9478f7cb312ec0866b6c4e4a0f11160441e8f4ffcd271
     uint32_t dk[10];
     Gost94Ctx ctx;
     if (hash_params[1].ctx== NULL) {
-        hash_params[1].ctx = malloc(sizeof(gost_ctx));
+        hash_params[1].ctx = _aligned_malloc(sizeof(gost_ctx), 16);
         gost_init(hash_params[1].ctx, hash_params[1].paramset);
     }
     ctx.ctx =  hash_params[1].ctx; ctx.hlen=32;
@@ -1068,6 +1164,7 @@ GOST(1000000 of "a") = 8693287aa62f9478f7cb312ec0866b6c4e4a0f11160441e8f4ffcd271
     if(memcmp(dk,h5, 20)==0) printf("OK\n");
 
 }
+#endif
     return 0;
 }
 #endif

@@ -19,23 +19,8 @@ typedef uint64_t v2di __attribute__((__vector_size__(16)));
 typedef uint8_t v64qi __attribute__((__vector_size__(64)));
 typedef uint8_t v8qi __attribute__((__vector_size__(8)));
 typedef uint8_t v16qi __attribute__((__vector_size__(16)));
-#if !defined(__clang__)
-#define v16qi_bswap(x) __builtin_shuffle((v16qi)(x),(v16qi){15,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0})
-#else //if __has_builtin(__builtin_shufflevector)
-#define v16qi_bswap(x) __builtin_shufflevector((v16qi)(x),(v16qi)(x),15,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
-#endif // __has_builtin
 
 /*! операции с векторами */
-/*
-static inline
-void v8di_reverse(v2di* v){
-    v16qi *r = (v16qi*)v;
-    v16qi r0 = r[0], r1 = r[1], r2 = r[2], r3 = r[3];
-    r[0] = v16qi_bswap(r3);
-    r[1] = v16qi_bswap(r2);
-    r[2] = v16qi_bswap(r1);
-    r[3] = v16qi_bswap(r0);
-}*/
 /*
 #define U64_REV(x) \
     ( (x << 56) & 0xff00000000000000UL ) |\
@@ -50,7 +35,8 @@ void v8di_reverse(v2di* v){
 
 // Tables for function F
 // замена регулярными выражениями U64_REV\(0x([A-F0-9]{2})([A-F0-9]{2})([A-F0-9]{2})([A-F0-9]{2})([A-F0-9]{2})([A-F0-9]{2})([A-F0-9]{2})([A-F0-9]{2})\) => 0x\8\7\6\5\4\3\2\1
-static const uint64_t T[8][256] = {
+static const uint64_t T[8][256] __attribute__((__aligned__(64)))
+= {
 {
         0xD01F715B5C7EF8E6,0x16FA240980778325,0xA8A42E857EE049C8,0x6AC1068FA186465B,
         0x6E417BD7A2E9320B,0x665C8167A437DAAB,0x7666681AA89617F6,0x4B959163700BDCF5,
@@ -798,7 +784,7 @@ static inline void F1(v8di* v)
     (*v) = s;
 }
 #endif
-#include <x86intrin.h>
+//#include <x86intrin.h>
 
 static //__attribute__ ((noinline))
 void F1(v8di *v, const v8di *w)
@@ -838,7 +824,8 @@ void F1(v8di *v, const v8di *w)
         v64qi vv, ww;
         __builtin_memcpy(&vv, v, sizeof(vv)); // загрузка вектора без выравнивания
         __builtin_memcpy(&ww, w, sizeof(ww));
-        v64qi a = (v64qi)(vv ^ ww);
+        vv = (vv ^ ww);
+        uint8_t* a = (uint8_t*)&vv;
 
         s[0]
         = t1[a[0]&0xFF] ^ t2[a[8]&0xFF] ^ t3[a[16]&0xFF] ^ t4[a[24]&0xFF]

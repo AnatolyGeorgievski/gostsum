@@ -21,6 +21,17 @@
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
+#if defined(__linux__)
+#include <netinet/in.h>
+#else
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__==__ORDER_LITTLE_ENDIAN__)
+#define htonl(x) __builtin_bswap32(x)
+#define ntohl(x) __builtin_bswap32(x)
+#else
+#define htonl(x) (x)
+#define ntohl(x) (x)
+#endif // __BYTE_ORDER__
+#endif
 //#include <glib.h>
 #include "hmac.h"
 typedef struct _GSList GSList;
@@ -100,7 +111,7 @@ static void hmac_final(HmacCtx* ctx, uint8_t * tag, unsigned int tlen)
     md->final  (ctx->ctx, tag, tlen);
 }
 #ifndef BN_ALIGN
-#define BN_ALIGN_BYTES 16
+#define BN_ALIGN_BYTES 32
 #define BN_ALIGN __attribute__((aligned(BN_ALIGN_BYTES)))
 #endif
 /*! \brief message digest
@@ -108,7 +119,7 @@ static void hmac_final(HmacCtx* ctx, uint8_t * tag, unsigned int tlen)
 void digest(const MDigest* md, uint8_t * tag, unsigned int tlen, const uint8_t * msg, unsigned int mlen)
 {
     uint8_t ct[md->ctx_size] BN_ALIGN;
-    void* ctx = &ct;//__builtin_alloca(md->ctx_size);//_aligned_malloc(md->ctx_size, 16);//
+    void* ctx = ct;//__builtin_alloca(md->ctx_size);//_aligned_malloc(md->ctx_size, 16);//
     md->init   (ctx);
     md->update (ctx, msg, mlen);
     md->final  (ctx, tag, tlen);
@@ -117,7 +128,8 @@ void digest(const MDigest* md, uint8_t * tag, unsigned int tlen, const uint8_t *
 int digest_verify(const MDigest* md, const uint8_t * tag, unsigned int tlen, const uint8_t * msg, unsigned int mlen)
 {
     uint8_t hash[tlen];
-    void* ctx = __builtin_alloca(md->ctx_size);
+	uint8_t ct[md->ctx_size] BN_ALIGN;
+    void* ctx = ct;//__builtin_alloca(md->ctx_size);
     md->init   (ctx);
     md->update (ctx, msg, mlen);
     md->final  (ctx, hash, tlen);
@@ -130,7 +142,8 @@ int digest_verify(const MDigest* md, const uint8_t * tag, unsigned int tlen, con
     */
 void ssha(const MDigest* md, uint8_t * tag, unsigned int tlen, const uint8_t * msg, unsigned int mlen, const uint8_t * salt, unsigned int slen)
 {
-    void* ctx = __builtin_alloca(md->ctx_size);
+	uint8_t buf[md->ctx_size] BN_ALIGN;
+    void* ctx = buf;//__builtin_alloca(md->ctx_size);
     md->init   (ctx);
     md->update (ctx, msg,  mlen);
     md->update (ctx, salt, slen);
@@ -145,7 +158,8 @@ void pbkdf1(const MDigest* md, void* dk, unsigned int dklen, const uint8_t *pass
                      const uint8_t *salt, unsigned int slen, unsigned int c)
 {
    uint8_t tag[md->hash_len];
-   void* ctx = __builtin_alloca(md->ctx_size);//uint64_t ctx[(md->ctx_size+7)>>3];
+   uint8_t buf[md->ctx_size] BN_ALIGN;
+   void* ctx = buf;//__builtin_alloca(md->ctx_size);//uint64_t ctx[(md->ctx_size+7)>>3];
    md->init   (ctx);
    md->update (ctx, passwd,  plen);
    md->update (ctx, salt, slen);
@@ -160,237 +174,12 @@ void pbkdf1(const MDigest* md, void* dk, unsigned int dklen, const uint8_t *pass
    __builtin_memcpy(dk, tag, dklen);
 }
 */
-#ifdef __x86_64__
-static
-void mpz_add (uint64_t * r, uint64_t *a, int64_t n)
-{
-    uint64_t ret, i;
-    __asm volatile (
-        "   subq    %2, %2           \n" // i=0
-        "   stc                      \n"
-        "  .p2align  4               \n"
-        "1: movq    (%3,%2, 4), %0   \n" // ac = a[i]
-        "   adcq    (%4,%2, 4), %0   \n" // ac = ac * b[i]
-        "   movq    %0, (%3,%2, 4)   \n" // r[i]=ac
-        "   leaq    1(%2),%2         \n" // i=i+1
-        "   loop    1b               \n"
-        "   adcq    %1, %1           \n"
-        :"=&a"(ret), "=&c"(n),"=&r"(i)
-        :"r"(r), "r"(a), "1"(n)
-        :"cc","memory"
-    );
-    //return n;
-}
-typedef uint64_t REG;
-#elif defined(__arm__)
-extern void mpz_add (uint32_t * r, uint32_t *a, int n);
-typedef uint32_t REG;
-#else // __x86_64__
-static
-//__attribute__((noinline))
-void mpz_add (uint32_t * r, uint32_t *a, int n)
-{
-    uint32_t ret, i;
-    //asm volatile("/BP1");
-    __asm volatile (
-        "   subl    %2, %2           \n" // i=0
-        "   stc                      \n"
-        "  .p2align  4               \n"
-        "1: movl    (%3,%2, 4), %0   \n" // ac = a[i]
-        "   adcl    (%4,%2, 4), %0   \n" // ac = ac * b[i]
-        "   movl    %0, (%3,%2, 4)   \n" // r[i]=ac
-        "   leal    1(%2),%2         \n" // i=i+1
-        "   loop    1b               \n"
-        "   adcl    %1, %1           \n"
-        :"=&a"(ret), "=&c"(n),"=&r"(i)
-        :"r"(r), "r"(a), "1"(n)
-        :"cc","memory"
-    );
-    //asm volatile("/BP2");
-    //return n;
-}
-typedef uint32_t REG;
-#endif
-typedef REG mpz_limb __attribute__((__vector_size__(16)));
-typedef char v16qi __attribute__((__vector_size__(16)));
-#if !defined(__clang__)
-#define mpz_bswap(x) (mpz_limb)__builtin_shuffle((v16qi)(x),(v16qi){15,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0})
-#else //if __has_builtin(__builtin_shufflevector)
-#define mpz_bswap(x) (mpz_limb)__builtin_shufflevector((v16qi)(x),(v16qi)(x),15,14,13,12,11,10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
-#endif // __has_builtin
-
-/*! \brief перестановка байт в обратном порядке
- */
-static //inline
-void mpz_revert512(mpz_limb* s)
-{
-#if 0
-    const int count = 64/8;
-    //REG r[64/sizeof(REG)];
-    register uint64_t r0, r1;
-    int i;
-    for (i=0; i<count/2; i++){
-        r0 = ((uint64_t*)s)[i];
-        r1 = ((uint64_t*)s)[count-1-i];
-        ((uint64_t*)s)[i] = __builtin_bswap64(r1);
-        ((uint64_t*)s)[count-1-i] = __builtin_bswap64(r0);
-    }
-#else
-    register mpz_limb r0,r1;
-    r0 = s[0];
-    r1 = s[3];
-    s[3] = mpz_bswap (r0);
-    s[0] = mpz_bswap (r1);
-    r0 = s[1];
-    r1 = s[2];
-    s[2] = mpz_bswap (r0);
-    s[1] = mpz_bswap (r1);
-#endif
-/*
-    mpz_limb s0 = s[0];
-    mpz_limb s1 = s[1];
-    mpz_limb s2 = s[2];
-    mpz_limb s3 = s[3];
-    s[0] = mpz_bswap (s3);
-    s[1] = mpz_bswap (s2);
-    s[2] = mpz_bswap (s1);
-    s[3] = mpz_bswap (s0);*/
-}
-/*! \brief перестановка байт в обратном порядке с копированием из строки
- */
-static //inline
-void mpz_cpyrev512(mpz_limb* __restrict s, uint8_t* __restrict src)
-{
-    register mpz_limb r0,r1;
-    r0 = *(mpz_limb*)(&src[ 0]);
-    r1 = *(mpz_limb*)(&src[48]);
-    s[3] = mpz_bswap (r0);
-    s[0] = mpz_bswap (r1);
-    r0 = *(mpz_limb*)(&src[16]);
-    r1 = *(mpz_limb*)(&src[32]);
-    s[2] = mpz_bswap (r0);
-    s[1] = mpz_bswap (r1);
-/*
-    mpz_limb s0,s1,s2,s3;
-    __builtin_memcpy(&s0, &src[ 0], 16);
-    __builtin_memcpy(&s1, &src[16], 16);
-    __builtin_memcpy(&s2, &src[32], 16);
-    __builtin_memcpy(&s3, &src[48], 16);
-    s[0] = mpz_bswap (s3);
-    s[1] = mpz_bswap (s2);
-    s[2] = mpz_bswap (s1);
-    s[3] = mpz_bswap (s0);
-    */
-}
-/*! \brief перестановка байт в обратном порядке с копированием строки
- */
-static
-void mpz_revcpy512(mpz_limb* __restrict s, uint8_t* __restrict dst)
-{
-    register mpz_limb r0,r1;
-    r0 = s[0];//*(mpz_limb*)(&src[ 0]);
-    r1 = s[3];//*(mpz_limb*)(&src[48]);
-    *(mpz_limb*)(&dst[48]) = mpz_bswap (r0);
-    *(mpz_limb*)(&dst[ 0]) = mpz_bswap (r1);
-    r0 = s[1];
-    r1 = s[2];
-    *(mpz_limb*)(&dst[32]) = mpz_bswap (r0);
-    *(mpz_limb*)(&dst[16]) = mpz_bswap (r1);
-/*
-    mpz_limb s0,s1,s2,s3;
-    s0 = mpz_bswap (s[0]);
-    s1 = mpz_bswap (s[1]);
-    s2 = mpz_bswap (s[2]);
-    s3 = mpz_bswap (s[3]);
-    __builtin_memcpy(&dst[ 0], &s3, 16);
-    __builtin_memcpy(&dst[16], &s2, 16);
-    __builtin_memcpy(&dst[32], &s1, 16);
-    __builtin_memcpy(&dst[48], &s0, 16);*/
-}
-
-/*
-ID для MAC =0x3 для PBES1 = 0x1
-Hash Function   Value u Value v
-MD5             128      512
-SHA-1           160      512
-SHA-224         224      512
-SHA-256         256      512
-SHA-384         384     1024
-SHA-512         512     1024
-SHA-512/224     224     1024
-SHA-512/256     256     1024
-*/
-void pbkdf1(const MDigest* md, uint8_t *dk, int dklen, int id, const uint8_t* passwd, unsigned int plen, const uint8_t* salt, unsigned int slen, unsigned int c)
-{
-    const unsigned int v = 64;//md->block_len;// 64
-    uint8_t iv[3*v] __attribute__((__aligned__(16)));
-    //id &= 0x3;
-
-    v16qi vi = (v16qi){id};
-#ifndef __clang__
-    vi = __builtin_shuffle(vi, (v16qi){0});
-#else
-    vi = __builtin_shufflevector(vi, vi, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
-#endif
-    ((v16qi*)iv)[0] = vi;
-    ((v16qi*)iv)[1] = vi;
-    ((v16qi*)iv)[2] = vi;
-    ((v16qi*)iv)[3] = vi;
-    int i,j,k;
-    for (i=j=k=0; i<v; i+=2)
-    {
-        iv[v+i] = salt[k];
-        iv[v+i+1] = salt[k+1];
-        k+=2;
-        if(k>=slen) k=0;
-        iv[2*v+i  ] = 0;
-        iv[2*v+i+1] = passwd[j++];
-        if (j>plen)j=0;
-    }
-    int key_len = 0;
-    while(1)
-    {
-        digest(md, &dk[key_len], md->hash_len, iv, 3*v);
-        for (i=1; i<c; i++)
-        {
-            digest(md, &dk[key_len], md->hash_len, &dk[key_len], md->hash_len);
-        }
-        key_len+=md->hash_len;
-        if (key_len>=dklen) return;
-
-        // нужно больше байт
-        mpz_limb num_ij[64/sizeof(mpz_limb)] __attribute__((__aligned__(16)));
-        mpz_limb num_b1[64/sizeof(mpz_limb)] __attribute__((__aligned__(16)));
-        uint32_t *b = (uint32_t*)num_b1;
-        for (i=j=0; i<64/4; i++)
-        {
-            __builtin_memcpy(&b[i],&dk[j],4);
-            j+=4;
-            if (j>=md->hash_len) j=0;
-        }
-        mpz_revert512(num_b1);
-        for (i=0; i < 128; i += 64)
-        {
-//            printf("\t!!!! PBKDF1 !!!!\n");
-            mpz_cpyrev512(num_ij,&iv[v+i]);
-            mpz_add ((REG*)num_ij, (REG*)num_b1, 64/sizeof(REG));// Ij = Ij+B+1;
-            mpz_revcpy512(num_ij,&iv[v+i]);
-        }
-/*
-        printf("IV:\n");
-        for (i=0;i<192;i++){
-            printf(" %02X",iv[i]);
-            if ((i&0xF)==0xF) printf("\n");
-        }*/
-
-    }
-}
-
 void hmac(const MDigest* md, uint8_t * tag, unsigned int tlen, const uint8_t * msg, unsigned int mlen, const uint8_t * key, unsigned int klen)
 {
     HmacCtx ct;
     v2di K[md->block_len/sizeof(v2di)];
-    void* ctx = __builtin_alloca(md->ctx_size);//uint64_t ctx[(md->ctx_size+7)>>3];
+	uint8_t buf[md->ctx_size] BN_ALIGN;
+    void* ctx = buf;//__builtin_alloca(md->ctx_size);//uint64_t ctx[(md->ctx_size+7)>>3];
     ct.md = md;
     ct.K = K;
     ct.ctx = ctx;
@@ -505,7 +294,8 @@ void pbkdf2_hmac(const MDigest* md, void* dk, unsigned int dklen, const uint8_t 
     HmacCtx ct;
     const unsigned int block_len=md->block_len;
     v2di K[block_len/sizeof(v2di)];
-    void* ctx = __builtin_alloca(md->ctx_size);//uint64_t ctx[(md->ctx_size+7)>>3];
+	uint8_t buf[md->ctx_size] BN_ALIGN;
+    void* ctx = buf;//__builtin_alloca(md->ctx_size);//uint64_t ctx[(md->ctx_size+7)>>3];
     ct.md = md;
     ct.K = K;
     ct.ctx = ctx;
@@ -521,7 +311,7 @@ void pbkdf2_hmac(const MDigest* md, void* dk, unsigned int dklen, const uint8_t 
     uint32_t count=1;
     while (dklen>0)
     {
-        S = __builtin_bswap32(count);
+        S = ntohl(count);
         hmac_init2 (&ct);
         hmac_update(&ct, salt, slen);
         hmac_update(&ct, (void*)&S, 4);
@@ -824,11 +614,12 @@ int main()
 
         };
         printf("DIGEST:\n");
-        uint8_t hash[64];
+        uint8_t hash[64];// __attribute__((__aligned__(16)));
         int i;
         for (i=0; i<80 && hmac_tests[i].msg; i++)
         {
             const MDigest *md = digest_select(hmac_tests[i].id);// MD_STRIBOG_256_digest;
+			if (md==NULL) continue;
             digest(md, hash, md->hash_len, (uint8_t*)hmac_tests[i].msg, strlen(hmac_tests[i].msg));
 //    for(i=0; i<8;i++) printf(" %016" PRIX64, ctx.H[i]); printf("\n");
             if (memcmp(hash, hmac_tests[i].hash, md->hash_len)==0) printf("%d %s OK\n", i, md->name);
@@ -844,7 +635,7 @@ int main()
             }
         }
     }
-    {
+    if(1){// HMAC
         char k0[] =
             "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F"
             "\x20\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2A\x2B\x2C\x2D\x2E\x2F\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x3A\x3B\x3C\x3D\x3E\x3F"
@@ -1103,6 +894,7 @@ int main()
         for (i=0; i<80 && hmac_tests[i].msg; i++)
         {
             const MDigest *md = digest_select(hmac_tests[i].id);// MD_STRIBOG_256_digest;
+			if (md==NULL) continue;
             hmac(md, hash, md->hash_len, (uint8_t*)hmac_tests[i].msg, hmac_tests[i].mlen, (uint8_t*)hmac_tests[i].key, hmac_tests[i].klen);
 //    for(i=0; i<8;i++) printf(" %016" PRIX64, ctx.H[i]); printf("\n");
             if (memcmp(hash, hmac_tests[i].hash, hmac_tests[i].hash_len)==0) printf("%d HMAC %s OK\n", i, md->name);
@@ -1126,7 +918,7 @@ int main()
             }
         }
     }
-    {
+    if(1){// PBKDF2-HMAC
         struct
         {
             int id;
@@ -1407,6 +1199,7 @@ int main()
         {
             //if (pbkdf2_tests[i].c> 4096) continue;
             const MDigest *md = digest_select(pbkdf2_tests[i].id);// MD_STRIBOG_256_digest;
+			if (md==NULL) continue;
             pbkdf2_hmac(md, dk, pbkdf2_tests[i].dklen, (uint8_t*)pbkdf2_tests[i].pass, pbkdf2_tests[i].plen, (uint8_t*)pbkdf2_tests[i].salt, pbkdf2_tests[i].slen, pbkdf2_tests[i].c);
             if (__builtin_memcmp(dk, pbkdf2_tests[i].dk,pbkdf2_tests[i].dklen)==0) printf("%d PBKDF2-HMAC %s OK\n", i, md->name);
             else
