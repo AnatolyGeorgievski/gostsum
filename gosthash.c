@@ -24,7 +24,8 @@ echo -n "8JaanTcVv6ndF8Xp/N011Lp46e68LjaUT9FhnEyQGs8=" | base64 -id | od -A n -X
 #include <stdlib.h>
 #include "hmac.h"
 #if defined(__sun__) || defined(__linux__) || defined(__FreeBSD__)
-#define _aligned_malloc(size, align) memalign(align, size)
+#define _aligned_malloc(size, align) ({void* ptr=NULL; int res = posix_memalign(&ptr, align, size); res?NULL:ptr;})
+//#define _aligned_malloc(size, align) memalign(align, size)
 #define _aligned_free(ptr) free(ptr)
 #else
 #include <malloc.h>
