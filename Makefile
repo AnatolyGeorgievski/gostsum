@@ -6,7 +6,7 @@ LDFLAGS= -s
 # -lsocket
 
 SRC = r3_args.c \
-	hmac.c md5.c sha.c sha512.c stribog.c gostsum.c gosthash.c
+	hmac.c md5.c sha.c shake256.c sha512.c stribog.c gostsum.c gosthash.c
 
 OUTPUT=gostsum
 INSTALL=gostsum
