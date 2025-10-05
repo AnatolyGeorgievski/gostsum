@@ -587,23 +587,6 @@ static void absorb(uint64x8_t *S, const uint8_t *data, unsigned int len){
         S[i] ^= v;
     }
 }
-#if 0
-static void absorb_bytes(uint64x8_t *S, unsigned int offs, const uint8_t *data, unsigned int len){
-    uint64x8_t v;
-    const unsigned int sz = sizeof(uint64x8_t);
-    if (offs%sz) {
-        v ^= v;
-        unsigned l = sz - offs%sz;
-        if (l>len) l = len;
-        __builtin_memcpy(&v + offs%sz, data, l);
-        S[offs/sz] ^= v;
-        data += l;
-        offs += l;
-        len  -= l;
-    }
-    absorb(S + offs/sz, data, len);
-}
-#endif
 /*! \brief SPONGE - губка для кодирования (absorb) байтовой строки и генерации (squeeze). 
 
     Метод KECCAK[c] использует функцию KECCAK-p[1600, 24] для кодирования и генерации. 
@@ -781,7 +764,7 @@ void cshake256(uint8_t *data, size_t len, uint8_t *tag, int d, const char* name,
 	}
 }
 
-#if 0 //!defined(TEST_SHA3)
+#if !defined(TEST_SHA3)
 #include "hmac.h"
 typedef struct _HashCtx HashCtx;
 struct _HashCtx{
@@ -789,16 +772,40 @@ struct _HashCtx{
     unsigned int len; // длина сообщения в буфере
 };
 static void sha3_256_init(HashCtx* ctx) {
-    __builtin_bzero(ctx->S, 1600/64);
+    __builtin_bzero(ctx->S, 256);
     ctx->len = 0;
 }
 static void sha3_512_init(HashCtx* ctx) {
-    __builtin_bzero(ctx->S, 1600/64);
+    __builtin_bzero(ctx->S, 256);
     ctx->len = 0;
 }
-
+static void absorb_bytes(uint64x8_t *S, unsigned int offs, const uint8_t *data, unsigned int len){
+    uint64x8_t v;
+    const unsigned int sz = sizeof(uint64x8_t);
+    if (offs%sz) {
+        v ^= v;
+        unsigned l = sz - offs%sz;
+        if (l>len) l = len;
+        __builtin_memcpy(&v + offs%sz, data, l);
+        S[offs/sz] ^= v;
+        data += l;
+        offs += l;
+        len  -= l;
+    }
+    absorb(S + offs/sz, data, len);
+}
 static void sha3_256_update(HashCtx* ctx, const uint8_t* msg, unsigned int mlen) {
     const unsigned int r = 136;
+    if (ctx->len){// дописать байты
+    }
+    for(int i=0; i<mlen/r; i++, msg+=r){
+        absorb(ctx->S, msg, r);
+        KeccakF1600((uint64_t*)ctx->S, 24);
+    }
+    if (mlen%r){
+        absorb(ctx->S, msg, mlen%r);
+        ctx->len += mlen%r;
+    }
 }
 static void sha3_512_update(HashCtx* ctx, const uint8_t* msg, unsigned int mlen) {
     const unsigned int r = 72;
