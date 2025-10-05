@@ -1,12 +1,24 @@
-# PKG_CONFIG_PATH=C:\GTK\lib\pkgconfig
 CC   = gcc
+CXX  = g++
 CFLAGS = -Wall -Werror -march=native -O3
 LDFLAGS= -s 
-# -g3
-# -lsocket
 
 SRC = r3_args.c \
-	hmac.c md5.c sha.c shake256.c sha512.c stribog.c gostsum.c gosthash.c
+	hmac.c md5.c sha.c gostsum.c
+
+ARCH ?= $(shell uname -m)
+ifeq ($(ARCH),aarch64)
+SRC += sha256_arm.c
+
+else ifeq ($(ARCH),x86_64) 
+#  echo "" | gcc -dM -E -march=native - | grep "__SHA__" 
+SRC +=	sha256_ni.c
+
+else 
+SRC += sha256.c 
+endif
+
+SRC += sha512.c shake256.c stribog.c gosthash.c
 
 OUTPUT=gostsum
 INSTALL=gostsum
@@ -19,8 +31,6 @@ $(OUTPUT): $(SRC:.c=.o)
 
 clean:
 	rm -f $(OUTPUT) $(SRC:.c=.o)
-
-# cp ../r2test/r3test $(INSTALL)/
 
 install: $(OUTPUT)
 	@mkdir -p $(INSTALL)

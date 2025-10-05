@@ -26,21 +26,24 @@ struct {
     char* passwd;
     char* output_file;
     int check;
+    int list;
     int verbose;
 } cli = {
 .alg="gost",
 .passwd=NULL,
 .output_file=NULL,
+.list = FALSE,
 .check = FALSE,
 .verbose = FALSE,
 };
 
 static GOptionEntry entries[] =
 {
-  { "alg",      'a', 0, G_OPTION_ARG_STRING,    &cli.alg,   "hash algorithm", "md5|sha|sha256|gost94|gost|gost512" },
+  { "alg",      'a', 0, G_OPTION_ARG_STRING,    &cli.alg,   "hash algorithm", "md5|sha|sha256|sha512|sha3-256|sha3-512|gost94|gost|gost512" },
 //  { "passwd",   'p', 0, G_OPTION_ARG_STRING,    &cli.passwd,   "password", "***" },
 //  { "output",   'o', 0, G_OPTION_ARG_FILENAME,  &cli.output_file,   "output file name", "*.*" },
-//  { "check",    'c', 0, G_OPTION_ARG_NONE,      &cli.check,   "Read from FILE and check", NULL },
+  { "check",    'c', 0, G_OPTION_ARG_NONE,      &cli.check,   "Read from FILE and check", NULL },
+  { "list",     'l', 0, G_OPTION_ARG_NONE,      &cli.list,    "List digest algorithms", NULL },
   { "verbose",  'v', 0, G_OPTION_ARG_NONE,      &cli.verbose, "Be verbose", NULL },
   { NULL }
 };
@@ -95,7 +98,9 @@ void r2_hash(const char* filename, unsigned int alg_id)
 const char* description=
 "Метод вычисления контрольных сумм gost94 описан в ГОСТ Р 34.11-94.\n"
 "Метод gost и gost512 (STRIBOG-256/512) описан в ГОСТ Р 34.11-2012.\n"
-"Метод sha описан в FIPS-180-2"
+"Метод sha1 описан в FIPS-180-2\n"
+"Метод sha2 описан в FIPS-180-3, August 2015\n"
+"Метод sha3 описан в FIPS-180-4, FIPS-202, NIST SP 800-185"
 ;
 int main(int argc, char *argv[])
 {
@@ -129,7 +134,13 @@ int main(int argc, char *argv[])
         hash_alg_id=MD_SHA1;
     } else
     if (strcmp(cli.alg, "sha256")==0){
-        hash_alg_id=MD_SHA256;
+        hash_alg_id=MD_SHA3_256;
+    } else
+    if (strcmp(cli.alg, "sha3-256")==0){
+        hash_alg_id=MD_SHA3_256;
+    } else
+    if (strcmp(cli.alg, "sha3-512")==0){
+        hash_alg_id=MD_SHA3_512;
     } else
     if (strcmp(cli.alg, "sha224")==0){
         hash_alg_id=MD_SHA224;
@@ -143,6 +154,12 @@ int main(int argc, char *argv[])
     if (strcmp(cli.alg, "md5")==0){
         hash_alg_id=MD_MD5;
     }
+	extern void digest_list_print();
+	if (cli.list){ 
+		digest_list_print();
+		return 0;
+	}
+
     const MDigest* md = digest_select(hash_alg_id);
     if (md==NULL) {
         printf("MD: algorithm '%s' not found\n", cli.alg);
@@ -157,7 +174,12 @@ int main(int argc, char *argv[])
     for (i=1; i<argc; i++) {
         char* filename = argv[i];
         if (r2_get_contents(filename, &contents, &length, NULL)) {
-
+extern void sha3_256(const uint8_t *data, size_t len, uint8_t *tag);
+/*			sha3_256((uint8_t*)contents, length, hash);
+            for (i=0;i<md->hash_len;i++){
+                printf("%02X", hash[i]);
+            }
+			printf("\n"); */
             digest(md, hash, md->hash_len, (uint8_t*)contents, length);
             int i;
             for (i=0;i<md->hash_len;i++){

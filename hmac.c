@@ -377,7 +377,15 @@ const MDigest* digest_select(int id)
 #endif
     return NULL;
 }
-
+void digest_list_print(){
+    GSList* list = digest_list;
+	
+    while(list){
+        const MDigest* md = list->data;
+        printf("`%s`\n",md->name);
+        list = list->next;
+    }
+}
 #ifdef TEST_HMAC
 /*!
 	$ /c/MinGW64/bin/gcc -march=corei7 -O3 -s stribog.c sha.c sha512.c hmac.c gosthash.c -o hmac.exe -m64

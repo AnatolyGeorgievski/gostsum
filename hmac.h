@@ -29,6 +29,11 @@ enum {
     MD_STRIBOG_512,// GOST R 34.11-2012(512)
     MD_BLAKE2S,
     MD_BLAKE2B,
+    MD_SHA3_224,// NIST Special Publication 800-185
+    MD_SHA3_256,// NIST.FIPS 202
+    MD_SHA3_384,
+    MD_SHA3_512,
+
 };
 
 #define MESSAGE_DIGEST(id) \
