@@ -136,8 +136,14 @@ int main(int argc, char *argv[])
     if (strcmp(cli.alg, "sha256")==0){
         hash_alg_id=MD_SHA3_256;
     } else
+    if (strcmp(cli.alg, "sha3-224")==0){
+        hash_alg_id=MD_SHA3_224;
+    } else
     if (strcmp(cli.alg, "sha3-256")==0){
         hash_alg_id=MD_SHA3_256;
+    } else
+    if (strcmp(cli.alg, "sha3-384")==0){
+        hash_alg_id=MD_SHA3_384;
     } else
     if (strcmp(cli.alg, "sha3-512")==0){
         hash_alg_id=MD_SHA3_512;
@@ -147,6 +153,15 @@ int main(int argc, char *argv[])
     } else
     if (strcmp(cli.alg, "sha384")==0){
         hash_alg_id=MD_SHA384;
+    } else
+    if (strcmp(cli.alg, "sha512-224")==0){
+        hash_alg_id=MD_SHA512_224;
+    } else
+    if (strcmp(cli.alg, "sha512-256")==0){
+        hash_alg_id=MD_SHA512_256;
+    } else
+    if (strcmp(cli.alg, "sha512-384")==0){
+        hash_alg_id=MD_SHA512_384;
     } else
     if (strcmp(cli.alg, "sha512")==0){
         hash_alg_id=MD_SHA512;
