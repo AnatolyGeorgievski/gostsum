@@ -771,7 +771,7 @@ struct _HashCtx{
     uint64x8_t S[256/64];
     unsigned int len; // длина сообщения в буфере
 };
-static void sha3_256_init(HashCtx* ctx) {
+static void sha3_init(HashCtx* ctx) {
     __builtin_bzero(ctx->S, 256);
     ctx->len = 0;
 }
@@ -794,8 +794,34 @@ static void absorb_bytes(uint64x8_t *S, unsigned int offs, const uint8_t *data, 
     }
     absorb(S + offs/sz, data, len);
 }
+static void sha3_224_update(HashCtx* ctx, const uint8_t* msg, unsigned int mlen) {
+    const unsigned int r = 144;
+    if (ctx->len){// дописать байты
+    }
+    for(int i=0; i<mlen/r; i++, msg+=r){
+        absorb(ctx->S, msg, r);
+        KeccakF1600((uint64_t*)ctx->S, 24);
+    }
+    if (mlen%r){
+        absorb(ctx->S, msg, mlen%r);
+        ctx->len += mlen%r;
+    }
+}
 static void sha3_256_update(HashCtx* ctx, const uint8_t* msg, unsigned int mlen) {
     const unsigned int r = 136;
+    if (ctx->len){// дописать байты
+    }
+    for(int i=0; i<mlen/r; i++, msg+=r){
+        absorb(ctx->S, msg, r);
+        KeccakF1600((uint64_t*)ctx->S, 24);
+    }
+    if (mlen%r){
+        absorb(ctx->S, msg, mlen%r);
+        ctx->len += mlen%r;
+    }
+}
+static void sha3_384_update(HashCtx* ctx, const uint8_t* msg, unsigned int mlen) {
+    const unsigned int r = 104;
     if (ctx->len){// дописать байты
     }
     for(int i=0; i<mlen/r; i++, msg+=r){
@@ -833,8 +859,18 @@ static void sha3_512_update(HashCtx* ctx, const uint8_t* msg, unsigned int mlen)
     }
 }
 
+static void sha3_224_final(HashCtx* ctx, uint8_t* tag, unsigned int tlen) {
+    _pad((uint8_t*)ctx->S, 0x06, 144, ctx->len);
+    KeccakF1600((uint64_t*)ctx->S, 24);
+    __builtin_memcpy(tag, ctx->S, tlen);
+}
 static void sha3_256_final(HashCtx* ctx, uint8_t* tag, unsigned int tlen) {
     _pad((uint8_t*)ctx->S, 0x06, 136, ctx->len);
+    KeccakF1600((uint64_t*)ctx->S, 24);
+    __builtin_memcpy(tag, ctx->S, tlen);
+}
+static void sha3_384_final(HashCtx* ctx, uint8_t* tag, unsigned int tlen) {
+    _pad((uint8_t*)ctx->S, 0x06, 104, ctx->len);
     KeccakF1600((uint64_t*)ctx->S, 24);
     __builtin_memcpy(tag, ctx->S, tlen);
 }
@@ -844,15 +880,35 @@ static void sha3_512_final(HashCtx* ctx, uint8_t* tag, unsigned int tlen) {
     __builtin_memcpy(tag, ctx->S, tlen);
 }
 
+MESSAGE_DIGEST(MD_SHA3_224) {
+    .id = MD_SHA3_224,
+    .name = "SHA3-224",
+    .block_len = 144,//64,
+    .hash_len = 224/8,
+    .ctx_size = sizeof(HashCtx),
+    .init   = (void*)sha3_init,
+    .update = (void*)sha3_224_update,
+    .final  = (void*)sha3_224_final,
+};
 MESSAGE_DIGEST(MD_SHA3_256) {
     .id = MD_SHA3_256,
     .name = "SHA3-256",
     .block_len = 136,//64,
     .hash_len = 32,
     .ctx_size = sizeof(HashCtx),
-    .init   = (void*)sha3_256_init,
+    .init   = (void*)sha3_init,
     .update = (void*)sha3_256_update,
     .final  = (void*)sha3_256_final,
+};
+MESSAGE_DIGEST(MD_SHA3_384) {
+    .id = MD_SHA3_384,
+    .name = "SHA3-384",
+    .block_len = 104,
+    .hash_len = 384/8,
+    .ctx_size = sizeof(HashCtx),
+    .init   = (void*)sha3_init,
+    .update = (void*)sha3_384_update,
+    .final  = (void*)sha3_384_final,
 };
 MESSAGE_DIGEST(MD_SHA3_512) {
     .id = MD_SHA3_512,
