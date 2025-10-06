@@ -78,7 +78,6 @@ SHAKE256(M, d) = KECCAK[512] (M || 1111, d). -- 136
 #include <x86intrin.h>
 
 typedef uint64_t uint64x5_t __attribute__((__vector_size__(64)));// 512
-typedef uint32_t uint32x5_t __attribute__((__vector_size__(32)));// 256
 #define U64_C(c) c##uLL
 static const uint64_t RC[24 + 1] = {// KECCAK-p[1600, 24] 
   U64_C(0x0000000000000001), U64_C(0x0000000000008082),
@@ -398,8 +397,16 @@ static void KeccakF1600(uint64_t * s, int nr)
 }
 #undef ROTL
 #undef ROTR
+typedef uint32_t uint32x5_t __attribute__((__vector_size__(32)));// 256
 #define ROTL(x,n) (((x) << (n)) | ((x) >> (32-(n))))
 #define ROTR(x,n) (((x) << (32-(n))) | ((x) >> (n)))
+/*! \brief пример реализации функции KECCAK для меньшей разрядности слова (w=32 бита)
+
+Алгоритмы разной разрядности отличаются набором сдвиговых констант в стадии $\rho$ и $\iota$. 
+Разрядность слова может быть выбрана любая от 1 бита до 64 бит.
+    \param s  - состояние алгоритма 800 бит 5*5*32 бит
+    \param nr - число раундов алгоритма
+ */
 void KeccakF800(uint32_t * s, int nr)
 {
     register uint32x5_t A0, A1, A2, A3, A4;
@@ -412,6 +419,7 @@ void KeccakF800(uint32_t * s, int nr)
     }
     for (int ir=0; ir<nr; ir++) {
         uint32x5_t B0,B1,B2,B3,B4, C, D;
+// theta:
         C[0] = A0[0] ^ A1[0] ^ A2[0] ^ A3[0] ^ A4[0];
         C[1] = A0[1] ^ A1[1] ^ A2[1] ^ A3[1] ^ A4[1];
         C[2] = A0[2] ^ A1[2] ^ A2[2] ^ A3[2] ^ A4[2];
@@ -475,7 +483,7 @@ void KeccakF800(uint32_t * s, int nr)
         A4[2] = B2[4];
         A4[3] = B3[0];
         A4[4] = B4[1];
-// chi
+// chi := x ^ (~x>>>1 &  x>>>2)
         C[0] = (~A0[1] & A0[2]);
         C[1] = (~A0[2] & A0[3]);
         C[2] = (~A0[3] & A0[4]);
@@ -595,10 +603,9 @@ static void absorb(uint64x8_t *S, const uint8_t *data, unsigned int len){
     \param tag - выходные данные
     \param d  - длина выходных данных
     \param CS - метка для кодирования байтовой строки 0x06 - для SHA3, 0x1F - для SHAKE, 00 - cSHAKE
-    \param r - размер блока в байтах (b-c)/8
+    \param r - размер блока в байтах r = (b-c). {168|144|136 для sha3-256|104|72 для sha3-512}
  */
 static void _sponge(const uint8_t *data, size_t len, uint8_t *tag, int d, uint8_t CS, unsigned int r){
-    //const unsigned int r = 168;
     __attribute__((aligned(64)))
     uint64x8_t S[256/(8*8)]={0};
     for (int i=0; i<len/r; i++, data+=r){// число целых блоков
@@ -646,13 +653,14 @@ struct _XOF_ctx {
     unsigned int tlen;
 };
 XOF_ctx_t* XOF_init(XOF_ctx_t* ctx) {
-    __builtin_bzero(ctx->S, 1600/64);
+    __builtin_bzero(ctx->S, 1600/8);
     ctx->len = 0;
     ctx->tlen = 0;
     return ctx;
 }
 void XOF_absorb(XOF_ctx_t* ctx, uint8_t* data, size_t len) {
-    _absorb(ctx->S, 168, data, len, 0x1F);
+    const unsigned int r = 168;
+    _absorb(ctx->S, r, data, len, 0x1F);
 }
 uint8_t* XOF_squeeze(XOF_ctx_t* ctx, uint8_t* data, size_t len) {
     const unsigned int r = 168;
