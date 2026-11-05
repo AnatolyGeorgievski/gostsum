@@ -85,12 +85,14 @@ int     g_option_context_parse (GOptionContext *context, int *argc, char***argv,
                 entry++;
             }
             if (entry->long_name == NULL){ // разбор опций help и version
-                if (arg[1] == '-' && strcmp("help", &arg[2])==0){
+                if ((arg[1] == '-' && strcmp("help", &arg[2])==0)
+                ||  (arg[1] == 'h' && arg[2] == '\0')
+                ||  (arg[1] == '?' && arg[2] == '\0')){
 extern const char * g_basename(const char *file_name);
                     printf("Usage: %s [OPTION...] %s\n", (char*)basename(args[0])/*g_get_prgname()*/, context->title);
                     if (context->summary) printf("%s\n", context->summary);
                     printf( "\nHelp Options:\n"
-                            " --help\t\tShow help options\n"
+                            " -h, --help\tShow help options\n"
                             "\nApplication Options:\n");
                     GOptionEntry* entry = context->entries;
                     while (entry->long_name != NULL)

@@ -80,17 +80,18 @@ make check
 ## Использование
 
 ```sh
-./gostsum -l
-./gostsum -a gost FILE
+./gostsum -h                 # справка: ALG, stdin, -c
+./gostsum -l                 # зарегистрированные digests
+./gostsum -a gost FILE       # по умолчанию тоже gost (СТРИБОГ-256)
 ./gostsum -a gost512 FILE
 ./gostsum -a sha256 FILE
 ./gostsum -a sha3-256 FILE
 
-# stdin (issue #3): без файлов или имя «-»
+# stdin: без файлов или имя «-»
 printf abc | ./gostsum -a sha256 -
 ./gostsum -a sha256 < FILE
 
-# проверка списка сумм (issue #4), формат: HEX *имя
+# проверка списка, формат: HEX *имя
 ./gostsum -a sha256 FILE > sums.txt
 ./gostsum -a sha256 -c sums.txt
 
@@ -99,7 +100,7 @@ printf abc | ./gostsum -a sha256 -
 ./gostsum -a gost -c ul-sums.txt
 ```
 
-`sha256` — SHA-2-256; `sha3-256` — SHA-3-256.
+Полный список `-a`: см. `./gostsum -h`. `sha`/`sha1` — SHA-1; `gost94` / `gost94-cp` — ГОСТ Р 34.11-94.
 
 ## Совместимость
 

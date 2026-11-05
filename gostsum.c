@@ -40,10 +40,15 @@ struct {
 
 static GOptionEntry entries[] =
 {
-  { "alg",      'a', 0, G_OPTION_ARG_STRING,    &cli.alg,   "hash algorithm", "md5|sha|sha256|sha512|sha3-256|sha3-512|gost94|gost|gost512" },
-  { "check",    'c', 0, G_OPTION_ARG_NONE,      &cli.check,   "Read checksums from FILE and verify", NULL },
-  { "list",     'l', 0, G_OPTION_ARG_NONE,      &cli.list,    "List digest algorithms", NULL },
-  { "verbose",  'v', 0, G_OPTION_ARG_NONE,      &cli.verbose, "Be verbose", NULL },
+  { "alg",      'a', 0, G_OPTION_ARG_STRING,    &cli.alg,
+    "algorithm (default: gost = STRIBOG-256)",
+    "ALG" },
+  { "check",    'c', 0, G_OPTION_ARG_NONE,      &cli.check,
+    "verify checksums from FILE (HEX *name lines)", NULL },
+  { "list",     'l', 0, G_OPTION_ARG_NONE,      &cli.list,
+    "list registered digests", NULL },
+  { "verbose",  'v', 0, G_OPTION_ARG_NONE,      &cli.verbose,
+    "verbose (-c: print OK lines)", NULL },
   { NULL }
 };
 
@@ -143,7 +148,8 @@ static int select_alg(const char* name)
     if (strcmp(name, "gost") == 0 || strcmp(name, "gost256") == 0) return MD_STRIBOG_256;
     if (strcmp(name, "gost512") == 0) return MD_STRIBOG_512;
     if (strcmp(name, "gost94") == 0) return MD_GOSTR341194;
-    if (strcmp(name, "sha") == 0) return MD_SHA1;
+    if (strcmp(name, "gost94-cp") == 0) return MD_GOSTR341194_CP;
+    if (strcmp(name, "sha") == 0 || strcmp(name, "sha1") == 0) return MD_SHA1;
     if (strcmp(name, "sha256") == 0) return MD_SHA256;
     if (strcmp(name, "sha3-224") == 0) return MD_SHA3_224;
     if (strcmp(name, "sha3-256") == 0) return MD_SHA3_256;
@@ -153,7 +159,6 @@ static int select_alg(const char* name)
     if (strcmp(name, "sha384") == 0) return MD_SHA384;
     if (strcmp(name, "sha512-224") == 0) return MD_SHA512_224;
     if (strcmp(name, "sha512-256") == 0) return MD_SHA512_256;
-    if (strcmp(name, "sha512-384") == 0) return MD_SHA512_384;
     if (strcmp(name, "sha512") == 0) return MD_SHA512;
     if (strcmp(name, "md5") == 0) return MD_MD5;
     return MD_NONE;
@@ -238,19 +243,30 @@ static int check_list(const MDigest* md, const char* listname)
 }
 
 const char* description=
-"Метод вычисления контрольных сумм gost94 описан в ГОСТ Р 34.11-94.\n"
-"Метод gost и gost512 (STRIBOG-256/512) описан в ГОСТ Р 34.11-2012.\n"
-"Метод sha1 описан в FIPS-180-2\n"
-"Метод sha2 описан в FIPS-180-3 / FIPS-180-4\n"
-"Метод sha3 описан в FIPS-202, NIST SP 800-185\n"
-"Без файлов или с именем «-» читаю stdin. -c — проверка списка сумм."
+"Контрольные суммы файлов (MIT). По умолчанию -a gost (СТРИБОГ-256).\n"
+"\n"
+"ALG (-a):\n"
+"  gost|gost256     СТРИБОГ-256   ГОСТ Р 34.11-2012\n"
+"  gost512          СТРИБОГ-512   ГОСТ Р 34.11-2012\n"
+"  gost94           ГОСТ Р 34.11-94 (TestParamSet)\n"
+"  gost94-cp        ГОСТ Р 34.11-94 (CryptoPro)\n"
+"  md5\n"
+"  sha              SHA-1         FIPS 180-2\n"
+"  sha224 sha256 sha384 sha512    SHA-2  FIPS 180-4\n"
+"  sha512-224 sha512-256\n"
+"  sha3-224 sha3-256 sha3-384 sha3-512   FIPS 202 / SP 800-185\n"
+"\n"
+"Без FILE или FILE=- — stdin.\n"
+"-c FILE — проверить список вида «HEX *имя» (как md5sum -c).\n"
+"-l — зарегистрированные digests; -h / --help — эта справка.\n"
+"УЛ (ГОСТ 2.051): docs/ul.md"
 ;
 
 int main(int argc, char *argv[])
 {
     setlocale(LC_ALL, "");
     setlocale(LC_NUMERIC, "C");
-    GOptionContext *context = g_option_context_new ("[FILE]...\nPrint or check GOST / SHA checksums");
+    GOptionContext *context = g_option_context_new ("[FILE]...\nPrint or check GOST / SHA / SHA3 checksums");
     g_option_context_add_main_entries (context, entries, NULL);
     g_option_context_set_summary(context, description);
     if (!g_option_context_parse (context, &argc, &argv, NULL))
