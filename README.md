@@ -47,7 +47,9 @@ make NO_NATIVE=1
 ```sh
 make clean
 make CC=arm-linux-gnueabihf-gcc ARCH=armv7l NO_NATIVE=1
-make CC=aarch64-linux-gnu-gcc ARCH=aarch64 NO_NATIVE=1
+make CC=aarch64-linux-gnu-gcc ARCH=aarch64 NO_NATIVE=1 \
+     CFLAGS='-std=gnu11 -Wall -O3 -D_GNU_SOURCE -march=armv8-a+crypto'
+# без Crypto Ext.: ARCH=armv7l → sha256.c
 ```
 
 ## Сборка: Windows (MSYS2)
@@ -103,7 +105,7 @@ printf abc | ./gostsum -a sha256 -
 | Платформа        | Статус                          |
 |------------------|---------------------------------|
 | Linux x86_64     | `make` / `make check`           |
-| Linux aarch64    | `sha256_arm.c`; кросс ок        |
+| Linux aarch64    | `sha256_arm.c` (+crypto)        |
 | Linux armv7/armhf| `sha256.c`; `NO_NATIVE=1`       |
 | FreeBSD          | `gmake`; C11 `aligned_alloc`    |
 | MSYS2 MinGW/UCRT | `gostsum.exe`                   |
