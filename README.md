@@ -35,6 +35,7 @@ make check
 
 На x86_64 без SHA-NI используется `sha256.c`; при `__SHA__` — `sha256_ni.c`.  
 Сетевой порядок байт — [`net.h`](net.h) (`ntoh*` / `hton*`).
+SHA3/SHAKE — [`shake256.c`](shake256.c) из R3-lib (регистрация digests под локальный `hmac.h`).
 
 Отключить `-march=native`:
 

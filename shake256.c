@@ -1,4 +1,4 @@
-/*! shake-256, SHA3-256, SHA3-512
+/*! shake-256, SHA3-256, SHA3-384, SHA3-512
 
 2025, Анатолий М. Георгиевский 
 
@@ -77,11 +77,21 @@ SHAKE256(M, d) = KECCAK[512] (M || 1111, d). -- 136
 #include <string.h>
 #if defined(__arm__) || defined(__aarch64__)
 #include <arm_acle.h>
-#elif defined(__i386__) || defined(__x86_64__)
+#else
 #include <x86intrin.h>
 #endif
 
+#if defined(__AVX512F__)
+#define DBG 0 // без векторизации =1 
+#else
+#define DBG 1 // без векторизации =1 
+#endif
+#if DBG==1
+typedef uint64_t uint64x5_t[5];
+#else
 typedef uint64_t uint64x5_t __attribute__((__vector_size__(64)));// 512
+#endif
+typedef uint32_t uint32x5_t __attribute__((__vector_size__(32)));// 256
 #define U64_C(c) c##uLL
 static const uint64_t RC[24 + 1] = {// KECCAK-p[1600, 24] 
   U64_C(0x0000000000000001), U64_C(0x0000000000008082),
@@ -124,6 +134,7 @@ for (t=0; t<24; t++){
 
 Rnd(A, ir) = ι(χ(π(ρ(θ(A)))), ir).
  */
+#if DBG==0
 static inline
 uint64x5_t chi(uint64x5_t a){
     uint64x5_t a1 = __builtin_shufflevector(a, a, 1, 2, 3, 4, 0, 5,6,7);
@@ -175,6 +186,7 @@ uint64x5_t rho(uint64x5_t a, uint64x5_t s){
     return (a<<s)|(a>>(64-s));
 #endif
 }
+#endif
 static void print_state(char* title, uint64x5_t a0, uint64x5_t a1, uint64x5_t a2, uint64x5_t a3, uint64x5_t a4)
 {
     printf("%s\n", title);
@@ -208,10 +220,10 @@ static void print_state(char* title, uint64x5_t a0, uint64x5_t a1, uint64x5_t a2
 }
 #define ROTL(x,n) (((x) << (n)) | ((x) >> (64-(n))))
 #define ROTR(x,n) (((x) << (64-(n))) | ((x) >> (n)))
-static void KeccakF1600(uint64_t * s, int nr)
+void KeccakF1600(uint64_t * s, int nr)
 {
-    register uint64x5_t A0, A1, A2, A3, A4;
-#ifdef __AVX512F__
+    uint64x5_t A0, A1, A2, A3, A4;
+#if defined(__AVX512F__) && DBG==0
     __mmask8 mask = 0x1F;
     A0 = (uint64x5_t)_mm512_maskz_load_epi64(mask, s);
     A1 = (uint64x5_t)_mm512_maskz_load_epi64(mask, s+5);
@@ -235,7 +247,7 @@ static void KeccakF1600(uint64_t * s, int nr)
         {18,  2, 61, 56, 14}};
 
     for (int ir=0; ir<nr; ir++) {
-#if 0// если не поддерживаются векторные типы. Эта реализация использует 64 битные типы.
+#if DBG==1// если не поддерживаются векторные типы. Эта реализация использует 64 битные типы.
         uint64x5_t B0,B1,B2,B3,B4, C, D;
         C[0] = A0[0] ^ A1[0] ^ A2[0] ^ A3[0] ^ A4[0];
         C[1] = A0[1] ^ A1[1] ^ A2[1] ^ A3[1] ^ A4[1];
@@ -274,7 +286,7 @@ static void KeccakF1600(uint64_t * s, int nr)
         B1[4] = ROTR(A1[4]^D[4], 44);
         B1[1] = ROTR(A1[1]^D[1], 20);
         B0[0] = (A0[0]^D[0]);
-        if(0)print_state("After rho", B0, B1, B2, B3, B4);
+        // if(0)print_state("After rho", B0, B1, B2, B3, B4);
         A0[0] = B0[0];
         A0[1] = B1[1];
         A0[2] = B2[2];
@@ -300,7 +312,7 @@ static void KeccakF1600(uint64_t * s, int nr)
         A4[2] = B2[4];
         A4[3] = B3[0];
         A4[4] = B4[1];
-        if(0)print_state("After pi", A0, A1, A2, A3, A4);
+        // if(0)print_state("After pi", A0, A1, A2, A3, A4);
 // chi
         C[0] = (~A0[1] & A0[2]);
         C[1] = (~A0[2] & A0[3]);
@@ -378,12 +390,12 @@ static void KeccakF1600(uint64_t * s, int nr)
         A3 = chi(r[3]);
         A4 = chi(r[4]);
 #endif
-        if(0)print_state("After chi", A0, A1, A2, A3, A4);
+        // if(0)print_state("After chi", A0, A1, A2, A3, A4);
 // iota
         A0[0] = A0[0] ^ RC[ir];
     }
-    if(0) print_state("After Permutation", A0, A1, A2, A3, A4);
-#ifdef __AVX512F__
+    // if(0) print_state("After Permutation", A0, A1, A2, A3, A4);
+#if defined( __AVX512F__) && DBG==0
     _mm512_mask_store_epi64(s   , mask, (__m512i)A0);
     _mm512_mask_store_epi64(s+5 , mask, (__m512i)A1);
     _mm512_mask_store_epi64(s+10, mask, (__m512i)A2);
@@ -401,17 +413,9 @@ static void KeccakF1600(uint64_t * s, int nr)
 }
 #undef ROTL
 #undef ROTR
-typedef uint32_t uint32x5_t __attribute__((__vector_size__(32)));// 256
 #define ROTL(x,n) (((x) << (n)) | ((x) >> (32-(n))))
 #define ROTR(x,n) (((x) << (32-(n))) | ((x) >> (n)))
-/*! \brief пример реализации функции KECCAK для меньшей разрядности слова (w=32 бита)
-
-Алгоритмы разной разрядности отличаются набором сдвиговых констант в стадии $\rho$ и $\iota$. 
-Разрядность слова может быть выбрана любая от 1 бита до 64 бит.
-    \param s  - состояние алгоритма 800 бит 5*5*32 бит
-    \param nr - число раундов алгоритма
- */
-void KeccakF800(uint32_t * s, int nr)
+static void KeccakF800(uint32_t * s, int nr)
 {
     register uint32x5_t A0, A1, A2, A3, A4;
     for (int i=0;i<5;i++) {
@@ -423,7 +427,6 @@ void KeccakF800(uint32_t * s, int nr)
     }
     for (int ir=0; ir<nr; ir++) {
         uint32x5_t B0,B1,B2,B3,B4, C, D;
-// theta:
         C[0] = A0[0] ^ A1[0] ^ A2[0] ^ A3[0] ^ A4[0];
         C[1] = A0[1] ^ A1[1] ^ A2[1] ^ A3[1] ^ A4[1];
         C[2] = A0[2] ^ A1[2] ^ A2[2] ^ A3[2] ^ A4[2];
@@ -487,7 +490,7 @@ void KeccakF800(uint32_t * s, int nr)
         A4[2] = B2[4];
         A4[3] = B3[0];
         A4[4] = B4[1];
-// chi := x ^ (~x>>>1 &  x>>>2)
+// chi
         C[0] = (~A0[1] & A0[2]);
         C[1] = (~A0[2] & A0[3]);
         C[2] = (~A0[3] & A0[4]);
@@ -599,6 +602,22 @@ static void absorb(uint64x8_t *S, const uint8_t *data, unsigned int len){
         S[i] ^= v;
     }
 }
+static void absorb_bytes(uint64x8_t *S, unsigned int offs, const uint8_t *data, unsigned int len){
+    uint64x8_t v;
+    const unsigned int sz = sizeof(uint64x8_t);
+    if (offs%sz) {
+        v ^= v;
+        unsigned l = sz - offs%sz;
+        if (l>len) l = len;
+        __builtin_memcpy(&v + offs%sz, data, l);
+        S[offs/sz] ^= v;
+        data += l;
+        offs += l;
+        len  -= l;
+    }
+    absorb(S + offs/sz, data, len);
+}
+
 /*! \brief SPONGE - губка для кодирования (absorb) байтовой строки и генерации (squeeze). 
 
     Метод KECCAK[c] использует функцию KECCAK-p[1600, 24] для кодирования и генерации. 
@@ -607,9 +626,10 @@ static void absorb(uint64x8_t *S, const uint8_t *data, unsigned int len){
     \param tag - выходные данные
     \param d  - длина выходных данных
     \param CS - метка для кодирования байтовой строки 0x06 - для SHA3, 0x1F - для SHAKE, 00 - cSHAKE
-    \param r - размер блока в байтах r = (b-c). {168|144|136 для sha3-256|104|72 для sha3-512}
+    \param r - размер блока в байтах (b-c)/8
  */
 static void _sponge(const uint8_t *data, size_t len, uint8_t *tag, int d, uint8_t CS, unsigned int r){
+    //const unsigned int r = 168;
     __attribute__((aligned(64)))
     uint64x8_t S[256/(8*8)]={0};
     for (int i=0; i<len/r; i++, data+=r){// число целых блоков
@@ -657,14 +677,13 @@ struct _XOF_ctx {
     unsigned int tlen;
 };
 XOF_ctx_t* XOF_init(XOF_ctx_t* ctx) {
-    __builtin_bzero(ctx->S, 1600/8);
+    __builtin_bzero(ctx->S, sizeof(ctx->S));
     ctx->len = 0;
     ctx->tlen = 0;
     return ctx;
 }
 void XOF_absorb(XOF_ctx_t* ctx, uint8_t* data, size_t len) {
-    const unsigned int r = 168;
-    _absorb(ctx->S, r, data, len, 0x1F);
+    _absorb(ctx->S, 168, data, len, 0x1F);
 }
 uint8_t* XOF_squeeze(XOF_ctx_t* ctx, uint8_t* data, size_t len) {
     const unsigned int r = 168;
@@ -711,6 +730,9 @@ void sha3_224(const uint8_t *data, size_t len, uint8_t *tag){
 void sha3_256(const uint8_t *data, size_t len, uint8_t *tag){
     _sponge(data, len, tag, 256/8, 0x06, 136);
 }
+void keccak_256(const uint8_t *data, size_t len, uint8_t *tag){
+    _sponge(data, len, tag, 256/8, 0x01, 136);
+}
 /*! \brief SHA3-512 Hash Function 
     \param data - входные данные
     \param len - длина входных данных в байтах
@@ -719,6 +741,9 @@ void sha3_256(const uint8_t *data, size_t len, uint8_t *tag){
 void sha3_512(const uint8_t *data, size_t len, uint8_t *tag){
     _sponge(data, len, tag, 512/8, 0x06, 72);
 }
+void keccak_512(const uint8_t *data, size_t len, uint8_t *tag){
+    _sponge(data, len, tag, 512/8, 0x01, 72);
+}
 /*! \brief SHA3-384 Hash Function 
     \param data - входные данные
     \param len - длина входных данных в байтах
@@ -726,6 +751,9 @@ void sha3_512(const uint8_t *data, size_t len, uint8_t *tag){
  */
 void sha3_384(const uint8_t *data, size_t len, uint8_t *tag){
     _sponge(data, len, tag, 384/8, 0x06, 104);
+}
+void keccak_384(const uint8_t *data, size_t len, uint8_t *tag){
+    _sponge(data, len, tag, 384/8, 0x01, 104);
 }
 /*! \brief Кодирование числа в бинарный формат
     \param s - указатель на буфер записи
@@ -776,7 +804,7 @@ void cshake256(uint8_t *data, size_t len, uint8_t *tag, int d, const char* name,
 	}
 }
 
-#if !defined(TEST_SHA3)
+#if 1 //!defined(TEST_SHA3)
 #include "hmac.h"
 typedef struct _HashCtx HashCtx;
 struct _HashCtx{
@@ -784,69 +812,11 @@ struct _HashCtx{
     unsigned int len; // длина сообщения в буфере
 };
 static void sha3_init(HashCtx* ctx) {
-    __builtin_bzero(ctx->S, 256);
+    __builtin_bzero(ctx->S, sizeof(ctx->S));
     ctx->len = 0;
 }
-static void sha3_512_init(HashCtx* ctx) {
-    __builtin_bzero(ctx->S, 256);
-    ctx->len = 0;
-}
-static void absorb_bytes(uint64x8_t *S, unsigned int offs, const uint8_t *data, unsigned int len){
-    uint64x8_t v;
-    const unsigned int sz = sizeof(uint64x8_t);
-    if (offs%sz) {
-        v ^= v;
-        unsigned l = sz - offs%sz;
-        if (l>len) l = len;
-        __builtin_memcpy(&v + offs%sz, data, l);
-        S[offs/sz] ^= v;
-        data += l;
-        offs += l;
-        len  -= l;
-    }
-    absorb(S + offs/sz, data, len);
-}
-static void sha3_224_update(HashCtx* ctx, const uint8_t* msg, unsigned int mlen) {
-    const unsigned int r = 144;
-    if (ctx->len){// дописать байты
-    }
-    for(int i=0; i<mlen/r; i++, msg+=r){
-        absorb(ctx->S, msg, r);
-        KeccakF1600((uint64_t*)ctx->S, 24);
-    }
-    if (mlen%r){
-        absorb(ctx->S, msg, mlen%r);
-        ctx->len += mlen%r;
-    }
-}
-static void sha3_256_update(HashCtx* ctx, const uint8_t* msg, unsigned int mlen) {
-    const unsigned int r = 136;
-    if (ctx->len){// дописать байты
-    }
-    for(int i=0; i<mlen/r; i++, msg+=r){
-        absorb(ctx->S, msg, r);
-        KeccakF1600((uint64_t*)ctx->S, 24);
-    }
-    if (mlen%r){
-        absorb(ctx->S, msg, mlen%r);
-        ctx->len += mlen%r;
-    }
-}
-static void sha3_384_update(HashCtx* ctx, const uint8_t* msg, unsigned int mlen) {
-    const unsigned int r = 104;
-    if (ctx->len){// дописать байты
-    }
-    for(int i=0; i<mlen/r; i++, msg+=r){
-        absorb(ctx->S, msg, r);
-        KeccakF1600((uint64_t*)ctx->S, 24);
-    }
-    if (mlen%r){
-        absorb(ctx->S, msg, mlen%r);
-        ctx->len += mlen%r;
-    }
-}
-static void sha3_512_update(HashCtx* ctx, const uint8_t* msg, unsigned int mlen) {
-    const unsigned int r = 72;
+static void sha3_update(HashCtx* ctx, const uint8_t* msg, unsigned int mlen, const unsigned int r) 
+{   // шаблон для параметра `r`:
     if (ctx->len){// дописать байты
         if (mlen+ctx->len < r){
             absorb_bytes(ctx->S, ctx->len, msg, mlen);
@@ -870,33 +840,41 @@ static void sha3_512_update(HashCtx* ctx, const uint8_t* msg, unsigned int mlen)
         ctx->len += mlen%r;
     }
 }
-
-static void sha3_224_final(HashCtx* ctx, uint8_t* tag, unsigned int tlen) {
-    _pad((uint8_t*)ctx->S, 0x06, 144, ctx->len);
+static void sha3_final(HashCtx* ctx, uint8_t* tag, unsigned int tlen, const unsigned int r) {
+    _pad((uint8_t*)ctx->S, 0x06, r, ctx->len);
     KeccakF1600((uint64_t*)ctx->S, 24);
     __builtin_memcpy(tag, ctx->S, tlen);
+}
+static void sha3_224_update(HashCtx* ctx, const uint8_t* msg, unsigned int mlen) {
+    sha3_update(ctx, msg, mlen, 144);
+}
+static void sha3_256_update(HashCtx* ctx, const uint8_t* msg, unsigned int mlen) {
+    sha3_update(ctx, msg, mlen, 136);
+}
+static void sha3_384_update(HashCtx* ctx, const uint8_t* msg, unsigned int mlen) {
+    sha3_update(ctx, msg, mlen, 104);
+}
+static void sha3_512_update(HashCtx* ctx, const uint8_t* msg, unsigned int mlen) {
+    sha3_update(ctx, msg, mlen, 72);
+}
+static void sha3_224_final(HashCtx* ctx, uint8_t* tag, unsigned int tlen) {
+    sha3_final(ctx, tag, tlen, 144);
 }
 static void sha3_256_final(HashCtx* ctx, uint8_t* tag, unsigned int tlen) {
-    _pad((uint8_t*)ctx->S, 0x06, 136, ctx->len);
-    KeccakF1600((uint64_t*)ctx->S, 24);
-    __builtin_memcpy(tag, ctx->S, tlen);
+    sha3_final(ctx, tag, tlen, 136);
 }
 static void sha3_384_final(HashCtx* ctx, uint8_t* tag, unsigned int tlen) {
-    _pad((uint8_t*)ctx->S, 0x06, 104, ctx->len);
-    KeccakF1600((uint64_t*)ctx->S, 24);
-    __builtin_memcpy(tag, ctx->S, tlen);
+    sha3_final(ctx, tag, tlen, 104);
 }
 static void sha3_512_final(HashCtx* ctx, uint8_t* tag, unsigned int tlen) {
-    _pad((uint8_t*)ctx->S, 0x06, 72, ctx->len);
-    KeccakF1600((uint64_t*)ctx->S, 24);
-    __builtin_memcpy(tag, ctx->S, tlen);
+    sha3_final(ctx, tag, tlen, 72);
 }
 
 MESSAGE_DIGEST(MD_SHA3_224) {
     .id = MD_SHA3_224,
     .name = "SHA3-224",
-    .block_len = 144,//64,
-    .hash_len = 224/8,
+    .block_len = 144,
+    .hash_len = 28,
     .ctx_size = sizeof(HashCtx),
     .init   = (void*)sha3_init,
     .update = (void*)sha3_224_update,
@@ -905,7 +883,7 @@ MESSAGE_DIGEST(MD_SHA3_224) {
 MESSAGE_DIGEST(MD_SHA3_256) {
     .id = MD_SHA3_256,
     .name = "SHA3-256",
-    .block_len = 136,//64,
+    .block_len = 136,
     .hash_len = 32,
     .ctx_size = sizeof(HashCtx),
     .init   = (void*)sha3_init,
@@ -916,7 +894,7 @@ MESSAGE_DIGEST(MD_SHA3_384) {
     .id = MD_SHA3_384,
     .name = "SHA3-384",
     .block_len = 104,
-    .hash_len = 384/8,
+    .hash_len = 48,
     .ctx_size = sizeof(HashCtx),
     .init   = (void*)sha3_init,
     .update = (void*)sha3_384_update,
@@ -925,10 +903,10 @@ MESSAGE_DIGEST(MD_SHA3_384) {
 MESSAGE_DIGEST(MD_SHA3_512) {
     .id = MD_SHA3_512,
     .name = "SHA3-512",
-    .block_len = 72,//64,
+    .block_len = 72,
     .hash_len = 64,
     .ctx_size = sizeof(HashCtx),
-    .init   = (void*)sha3_512_init,
+    .init   = (void*)sha3_init,
     .update = (void*)sha3_512_update,
     .final  = (void*)sha3_512_final,
 };
@@ -1041,6 +1019,13 @@ int main(int argc, char** argv)
 	if (__builtin_memcmp(test_sha3_224_0, tag, 224/8)==0) printf("..ok\n");
     sha3_256((uint8_t*)"", 0, tag); 
     print_hash("SHA3-256 Hash(0)", tag, 256/8);
+/*	"Hello, Ethereum!" with Keccak256 produces the following 256-bit hash:
+	`ed2bdec58e9a1aabdf638c267d16b11fb3f92c987d6bd7a35647e017e584f50d`
+	`0a1e2723bd7f1996832b7ed7406df8ad975deba1aa04020b5bfc3e6fe70ecc29`
+*/
+    keccak_256((uint8_t*)"Hello, Ethereum!", 16, tag); 
+	print_hash("Keccak-256 Hash(0)", tag, 256/8);
+
 /* Hash val is */
 	uint8_t test_sha3_256_0[] = {
     0xA7, 0xFF, 0xC6, 0xF8, 0xBF, 0x1E, 0xD7, 0x66, 0x51, 0xC1, 0x47, 0x56, 0xA0, 0x61, 0xD6, 0x62,
@@ -1056,6 +1041,8 @@ int main(int argc, char** argv)
 	if (__builtin_memcmp(test_sha3_384_0, tag, 384/8)==0) printf("..ok\n");
     sha3_512((uint8_t*)"", 0, tag); 
     print_hash("SHA3-512 Hash(0)", tag, 512/8);
+    keccak_512((uint8_t*)"Hello, Ethereum!", 16, tag); 
+	print_hash("Keccak-512 Hash(0)", tag, 512/8);
 /* Hash val is */
 	uint8_t test_sha3_512_0[] = {
 	0xA6, 0x9F, 0x73, 0xCC, 0xA2, 0x3A, 0x9A, 0xC5, 0xC8, 0xB5, 0x67, 0xDC, 0x18, 0x5A, 0x75, 0x6E,
