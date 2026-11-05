@@ -141,10 +141,8 @@ static inline void XOR(v256 *x, const v256 *a)
     x->q[0] ^= a->q[0];
     x->q[1] ^= a->q[1];
 }
-#if defined(__arm__)
-extern void UADD(v256 *a, v256 *b);
-
-#elif defined(__x86_64__)//0
+/* arm/aarch64 и прочие: переносимый UADD в #else ниже */
+#if defined(__x86_64__)//0
 static inline
 void UADD(v256 *a, v256 *b)
 {

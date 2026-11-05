@@ -75,7 +75,11 @@ SHAKE256(M, d) = KECCAK[512] (M || 1111, d). -- 136
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#if defined(__arm__) || defined(__aarch64__)
+#include <arm_acle.h>
+#elif defined(__i386__) || defined(__x86_64__)
 #include <x86intrin.h>
+#endif
 
 typedef uint64_t uint64x5_t __attribute__((__vector_size__(64)));// 512
 #define U64_C(c) c##uLL

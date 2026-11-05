@@ -42,6 +42,14 @@ make check
 make NO_NATIVE=1
 ```
 
+Кросс armhf / aarch64 (без `-march=native`):
+
+```sh
+make clean
+make CC=arm-linux-gnueabihf-gcc ARCH=armv7l NO_NATIVE=1
+make CC=aarch64-linux-gnu-gcc ARCH=aarch64 NO_NATIVE=1
+```
+
 ## Сборка: Windows (MSYS2)
 
 1. Установите [MSYS2](https://www.msys2.org/).
@@ -95,7 +103,8 @@ printf abc | ./gostsum -a sha256 -
 | Платформа        | Статус                          |
 |------------------|---------------------------------|
 | Linux x86_64     | `make` / `make check`           |
-| Linux aarch64    | `sha256_arm.c`                  |
+| Linux aarch64    | `sha256_arm.c`; кросс ок        |
+| Linux armv7/armhf| `sha256.c`; `NO_NATIVE=1`       |
 | FreeBSD          | `gmake`; C11 `aligned_alloc`    |
 | MSYS2 MinGW/UCRT | `gostsum.exe`                   |
 | Clang            | `make CC=clang` / `make check`  |
