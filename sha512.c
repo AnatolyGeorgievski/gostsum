@@ -17,6 +17,7 @@
 #endif
 
 #include "hmac.h"
+#include "net.h"
 
     typedef uint64_t v8di __attribute__((__vector_size__(64)));
     typedef uint64_t v2di __attribute__((__vector_size__(16)));

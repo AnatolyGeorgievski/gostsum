@@ -37,7 +37,7 @@
 #include <inttypes.h>
 #include <string.h>
 #include <stdio.h>
-//#include "net.h"
+#include "net.h"
 #include "hmac.h"
 #include <sys/param.h> // GCC
 

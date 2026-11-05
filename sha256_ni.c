@@ -12,7 +12,7 @@ echo | gcc -march=native -dM -E - | grep SHA
 #include <stdio.h>
 #include "hmac.h"
 
-#include <intrin.h>
+#include <x86intrin.h>
 static uint32_t htobe32(uint32_t  v)
 {
 #if (__BYTE_ORDER__==__ORDER_BIG_ENDIAN__)

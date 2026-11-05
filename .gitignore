@@ -5,3 +5,7 @@
 *.o
 *.so
 *.a
+# Local Linux binary / check temps
+gostsum
+gostsum_dbg
+gostsum-check-*

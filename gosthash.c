@@ -13,7 +13,7 @@ OID: 1.2.643.2.2.35.1 id-GostR3410-2001-CryptoPro-A-ParamSet
 OID: 1.2.643.2.2.30.1 id-GostR3411-94-CryptoProParamSet
 
 
-    This file is distributed under GPL
+    This file is distributed under the MIT License
 /usr/gcc/4.3/bin/gcc -DDEBUG_GOST -o gost src/gosthash.c src/base64.c
 $ gcc -Os -s -DDEBUG_GOST -o gosthash.exe gosthash.c base64.c
 echo -n "8JaanTcVv6ndF8Xp/N011Lp46e68LjaUT9FhnEyQGs8=" | base64 -id | od -A n -X
@@ -23,13 +23,13 @@ echo -n "8JaanTcVv6ndF8Xp/N011Lp46e68LjaUT9FhnEyQGs8=" | base64 -id | od -A n -X
 #include <stdio.h>
 #include <stdlib.h>
 #include "hmac.h"
-#if defined(__sun__) || defined(__linux__) || defined(__FreeBSD__)
-#define _aligned_malloc(size, align) ({void* ptr=NULL; int res = posix_memalign(&ptr, align, size); res?NULL:ptr;})
-//#define _aligned_malloc(size, align) memalign(align, size)
-#define _aligned_free(ptr) free(ptr)
-#else
+/* Windows CRT already has _aligned_malloc/_aligned_free (malloc.h). */
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 #include <malloc.h>
-#endif // __sun__ __linux__ __FreeBSD__
+#elif !defined(_aligned_malloc)
+#define _aligned_malloc(size, align) aligned_alloc((align), (size))
+#define _aligned_free(ptr) free(ptr)
+#endif
 
 typedef char v16qi __attribute__((__vector_size__(16)));
 //typedef uint8_t v4qi __attribute__((__vector_size__(4)));
