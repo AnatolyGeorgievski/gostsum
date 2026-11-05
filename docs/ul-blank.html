@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>УЛ — информационно-удостоверяющий лист (ГОСТ 2.051-2013)</title>
+<style>
+  @page { size: A4; margin: 12mm; }
+  body { font-family: "Times New Roman", Times, serif; font-size: 11pt; color: #000; }
+  h1 { font-size: 14pt; text-align: center; margin: 0 0 8pt; }
+  .sub { text-align: center; font-size: 10pt; margin-bottom: 12pt; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 10pt; }
+  th, td { border: 1px solid #000; padding: 4pt 6pt; vertical-align: top; }
+  th { font-weight: normal; background: #f3f3f3; }
+  .meta td { height: 1.4em; }
+  .sums td:first-child { width: 35%; }
+  .sign td { height: 2.2em; }
+  .note { font-size: 9pt; margin-top: 8pt; }
+  .fill { color: #666; font-style: italic; }
+</style>
+</head>
+<body>
+<h1>Информационно-удостоверяющий лист</h1>
+<p class="sub">ГОСТ 2.051-2013 · ЕСКД. Электронные документы</p>
+
+<table class="meta">
+  <tr>
+    <th>Перв. примен.</th><td contenteditable="true" class="fill"> </td>
+    <th>Обозначение документа</th><td contenteditable="true" class="fill"> </td>
+  </tr>
+  <tr>
+    <th>Наименование изделия / документа</th><td colspan="3" contenteditable="true" class="fill"> </td>
+  </tr>
+  <tr>
+    <th>Версия</th><td contenteditable="true"></td>
+    <th>Номер последнего изменения</th><td contenteditable="true"></td>
+  </tr>
+  <tr>
+    <th>Имя файла</th><td colspan="3" contenteditable="true" class="fill">firmware.bin / drawing.pdf</td>
+  </tr>
+</table>
+
+<table class="sums">
+  <tr><th>Алгоритм расчета</th><th>Контрольная сумма (HEX)</th></tr>
+  <tr><td>GOST 34.11-2012</td><td contenteditable="true"></td></tr>
+  <tr><td>GOST 34.11-94</td><td contenteditable="true"></td></tr>
+  <tr><td>SHA256</td><td contenteditable="true"></td></tr>
+  <tr><td contenteditable="true"></td><td contenteditable="true"></td></tr>
+</table>
+
+<p><b>Примечание:</b> <span contenteditable="true" class="fill"> </span></p>
+
+<table class="sign">
+  <tr>
+    <th>Обозначение УЛ</th><td contenteditable="true" class="fill">… УЛ</td>
+    <th>Литера</th><td contenteditable="true">О1</td>
+    <th>Лист</th><td>1</td>
+    <th>Листов</th><td contenteditable="true">1</td>
+  </tr>
+  <tr>
+    <th>Разраб.</th><td contenteditable="true"></td>
+    <th>Пров.</th><td contenteditable="true"></td>
+    <th>Утв.</th><td contenteditable="true"></td>
+    <th>Дата</th><td contenteditable="true"></td>
+  </tr>
+</table>
+
+<p class="note">
+Суммы: <code>gostsum -a gost FILE</code>, <code>-a gost94</code>, <code>-a sha256</code>.
+Проверка комплекта: <code>gostsum -a gost -c ul-sums.txt</code>.
+См. <code>docs/ul.md</code>.
+</p>
+</body>
+</html>
